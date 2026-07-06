@@ -1,0 +1,39 @@
+{
+  "app": {
+    "language": "pt-BR",
+    "timezone": "America/Fortaleza"
+  },
+  "ui": {
+    "theme": "dark",
+    "table_style": "compact",
+    "progress": true,
+    "notifications": true
+  },
+  "paths": {
+    "workdir": "data/projects",
+    "reports": "reports",
+    "logs": "logs",
+    "cache": "cache",
+    "backups": "backups"
+  },
+  "logging": {
+    "level": "INFO",
+    "max_bytes": 1048576,
+    "backup_count": 5,
+    "retention_days": 30
+  },
+  "reports": {
+    "default_format": "markdown",
+    "template": "technical"
+  },
+  "security": {
+    "active_profile": "administrator"
+  },
+  "performance": {
+    "max_tasks": 4,
+    "cache_enabled": true
+  },
+  "modules": {},
+  "plugins": {}
+}
+

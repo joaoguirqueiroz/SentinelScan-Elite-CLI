@@ -1,0 +1,86 @@
+"""Argument parser for the SentinelScan Elite CLI."""
+
+from __future__ import annotations
+
+import argparse
+
+from core.constants import APP_NAME, APP_VERSION
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="sentinelscan",
+        description=f"{APP_NAME} - plataforma modular de auditoria autorizada.",
+    )
+    parser.add_argument("--root", help="Application root directory.")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {APP_VERSION}")
+
+    subparsers = parser.add_subparsers(dest="command")
+
+    subparsers.add_parser("status", help="Show application health and loaded components.")
+    subparsers.add_parser("interactive", help="Open the guided terminal menu.")
+
+    config = subparsers.add_parser("config", help="Manage central configuration.")
+    config_sub = config.add_subparsers(dest="config_command", required=True)
+    config_sub.add_parser("show", help="Show all configuration.")
+    config_get = config_sub.add_parser("get", help="Read one configuration key.")
+    config_get.add_argument("key")
+    config_set = config_sub.add_parser("set", help="Persist one configuration key.")
+    config_set.add_argument("key")
+    config_set.add_argument("value")
+    config_sub.add_parser("reset", help="Restore default configuration.")
+
+    projects = subparsers.add_parser("projects", help="Manage projects.")
+    projects_sub = projects.add_subparsers(dest="projects_command", required=True)
+    project_create = projects_sub.add_parser("create", help="Create a project.")
+    project_create.add_argument("name")
+    project_create.add_argument("--description", default="")
+    project_create.add_argument("--owner", default="system")
+    projects_sub.add_parser("list", help="List active projects.")
+    project_show = projects_sub.add_parser("show", help="Show project details.")
+    project_show.add_argument("project_id")
+    project_archive = projects_sub.add_parser("archive", help="Archive a project.")
+    project_archive.add_argument("project_id")
+
+    sessions = subparsers.add_parser("sessions", help="Manage project sessions.")
+    sessions_sub = sessions.add_subparsers(dest="sessions_command", required=True)
+    session_start = sessions_sub.add_parser("start", help="Start a session.")
+    session_start.add_argument("project_id")
+    session_end = sessions_sub.add_parser("end", help="End a session.")
+    session_end.add_argument("project_id")
+    session_end.add_argument("session_id")
+    session_end.add_argument("--state", default="finished")
+    session_list = sessions_sub.add_parser("list", help="List sessions from a project.")
+    session_list.add_argument("project_id")
+
+    modules = subparsers.add_parser("modules", help="List or run modules.")
+    modules_sub = modules.add_subparsers(dest="modules_command", required=True)
+    modules_sub.add_parser("list", help="List registered modules.")
+    module_run = modules_sub.add_parser("run", help="Run one module.")
+    module_run.add_argument("module_id")
+    module_run.add_argument("--project")
+    module_run.add_argument("--session")
+    module_run.add_argument("--param", action="append", default=[], help="Parameter as key=value.")
+    module_run.add_argument("--report", action="store_true", help="Generate a report for the result.")
+
+    reports = subparsers.add_parser("reports", help="Manage generated reports.")
+    reports_sub = reports.add_subparsers(dest="reports_command", required=True)
+    reports_sub.add_parser("list", help="List generated reports.")
+    report_generate = reports_sub.add_parser("generate", help="Generate a manual report.")
+    report_generate.add_argument("--title", required=True)
+    report_generate.add_argument("--project")
+    report_generate.add_argument("--session")
+    report_generate.add_argument("--format", choices=["markdown", "json"], default="markdown")
+    report_generate.add_argument("--data", default="{}", help="Inline JSON payload.")
+
+    plugins = subparsers.add_parser("plugins", help="Manage plugins.")
+    plugins_sub = plugins.add_subparsers(dest="plugins_command", required=True)
+    plugins_sub.add_parser("list", help="List discovered plugins.")
+
+    logs = subparsers.add_parser("logs", help="Inspect logs and audit trail.")
+    logs_sub = logs.add_subparsers(dest="logs_command", required=True)
+    audit = logs_sub.add_parser("audit", help="Show recent audit records.")
+    audit.add_argument("--limit", type=int, default=20)
+
+    return parser
+

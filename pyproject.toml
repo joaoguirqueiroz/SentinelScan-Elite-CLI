@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sentinelscan-elite-cli"
+version = "1.0.0"
+description = "Professional modular CLI for authorized security auditing workflows."
+requires-python = ">=3.10"
+authors = [{ name = "Joao Guilherme" }]
+dependencies = []
+
+[project.scripts]
+sentinelscan = "cli.app:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+

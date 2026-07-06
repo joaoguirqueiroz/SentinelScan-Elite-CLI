@@ -1,0 +1,3 @@
+SentinelScan Elite CLI
+Professional modular CLI for authorized security auditing workflows.
+

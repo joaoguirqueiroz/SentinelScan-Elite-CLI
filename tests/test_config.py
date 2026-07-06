@@ -1,0 +1,102 @@
+from __future__ import annotations
+
+import json
+
+import pytest
+
+from core.exceptions import ConfigurationError, ValidationError
+from services.config_service import ConfigService
+
+
+def test_config_loads_defaults(runtime_root):
+    service = ConfigService(runtime_root)
+
+    settings = service.load()
+
+    assert settings["app"]["language"] == "pt-BR"
+    assert settings["ui"]["theme"] == "dark"
+
+
+def test_config_set_persists_valid_value(runtime_root):
+    service = ConfigService(runtime_root)
+    service.load()
+
+    service.set("ui.theme", "light")
+
+    assert ConfigService(runtime_root).load()["ui"]["theme"] == "light"
+
+
+def test_config_invalid_values_fall_back_to_safe_defaults(runtime_root):
+    service = ConfigService(runtime_root)
+    settings = service.validate(
+        {
+            "ui": {"theme": "purple"},
+            "logging": {"level": "verbose"},
+            "reports": {"default_format": "pdf"},
+        }
+    )
+
+    assert settings["ui"]["theme"] == "dark"
+    assert settings["logging"]["level"] == "INFO"
+    assert settings["reports"]["default_format"] == "markdown"
+
+
+def test_config_rejects_unsafe_paths(runtime_root):
+    service = ConfigService(runtime_root)
+
+    with pytest.raises(ValidationError):
+        service.validate({"paths": {"workdir": "../outside"}})
+
+
+def test_config_reset_restores_defaults(runtime_root):
+    service = ConfigService(runtime_root)
+    service.load()
+    service.set("ui.theme", "light")
+
+    reset = service.reset()
+
+    assert reset["ui"]["theme"] == "dark"
+
+
+def test_config_missing_path_key_raises(runtime_root):
+    service = ConfigService(runtime_root)
+    service.load()
+
+    with pytest.raises(ConfigurationError):
+        service.resolve_path("missing")
+
+
+def test_config_cannot_set_nested_key_below_scalar(runtime_root):
+    service = ConfigService(runtime_root)
+    service.load()
+    service.set("custom", "value")
+
+    with pytest.raises(ConfigurationError):
+        service.set("custom.child", True)
+
+
+def test_config_save_before_load_raises(runtime_root):
+    with pytest.raises(ConfigurationError):
+        ConfigService(runtime_root).save()
+
+
+def test_config_recovers_from_corrupted_runtime_file(runtime_root):
+    runtime_file = runtime_root / "data" / "config" / "settings.json"
+    runtime_file.parent.mkdir(parents=True, exist_ok=True)
+    runtime_file.write_text("{broken json", encoding="utf-8")
+
+    settings = ConfigService(runtime_root).load()
+
+    assert settings["ui"]["theme"] == "dark"
+
+
+def test_config_merges_runtime_overlay(runtime_root):
+    runtime_file = runtime_root / "data" / "config" / "settings.json"
+    runtime_file.parent.mkdir(parents=True, exist_ok=True)
+    runtime_file.write_text(json.dumps({"ui": {"theme": "high-contrast"}}), encoding="utf-8")
+
+    settings = ConfigService(runtime_root).load()
+
+    assert settings["ui"]["theme"] == "high-contrast"
+    assert settings["app"]["language"] == "pt-BR"
+
