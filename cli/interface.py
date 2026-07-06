@@ -118,6 +118,7 @@ class TerminalRenderer:
                     "Gerar relatorios: use 'reports generate' ou execute modulo com '--report'.",
                     "Usar Nmap: python main.py scan nmap <alvo> --authorize.",
                     "Usar Nuclei: python main.py scan nuclei <alvo> --authorize.",
+                    "Instalador assistido: python scripts/setup_wizard.py ou python main.py setup wizard.",
                     "Listar modulos: use 'modules list' ou a opcao 13 no menu interativo.",
                     "Relatorios ficam em reports/<projeto>/<ano>/<mes>/<dia>/<sessao>/<ferramenta>.",
                     "Formatos: markdown, txt, json, csv e html.",
@@ -131,6 +132,8 @@ class TerminalRenderer:
             {"command": "python main.py modules list", "purpose": "Listar modulos"},
             {"command": "python main.py scan nmap 127.0.0.1 --authorize", "purpose": "Nmap autorizado"},
             {"command": "python main.py scan nuclei http://localhost --authorize", "purpose": "Nuclei autorizado"},
+            {"command": "python main.py setup check", "purpose": "Verificar ambiente e ferramentas"},
+            {"command": "python scripts/setup_wizard.py", "purpose": "Abrir instalador assistido"},
             {"command": "python main.py reports list", "purpose": "Listar relatorios"},
             {"command": "python main.py maintenance clean-temp", "purpose": "Simular limpeza segura"},
             {"command": "python main.py maintenance clean-temp --yes", "purpose": "Limpar cache descartavel"},
@@ -181,6 +184,30 @@ class TerminalRenderer:
         )
         if reports:
             self.print_table(reports, ["format", "path", "generated_at"])
+
+    def print_setup_report(self, report: dict[str, Any]) -> None:
+        checks = report.get("checks", [])
+        self.print_panel(
+            "Verificacao de ambiente",
+            [
+                f"Status final: {report.get('overall_status')}",
+                f"Sistema: {report.get('operating_system')}",
+                f"Gerenciador: {report.get('package_manager') or 'nao detectado'}",
+                f"Relatorio TXT: {report.get('report_paths', {}).get('txt', '-')}",
+                f"Relatorio JSON: {report.get('report_paths', {}).get('json', '-')}",
+            ],
+            style="green" if report.get("overall_status") == "OK" else "yellow",
+        )
+        rows = [
+            {
+                "item": check.get("name"),
+                "status": check.get("status"),
+                "version": check.get("version") or "-",
+                "action": check.get("action") or "-",
+            }
+            for check in checks
+        ]
+        self.print_table(rows, ["item", "status", "version", "action"])
 
     def print_final_session_report(self, summary: dict[str, Any]) -> None:
         print(

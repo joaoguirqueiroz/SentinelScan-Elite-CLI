@@ -15,6 +15,29 @@ python main.py interactive
 
 No menu interativo, use `0` para sair corretamente e visualizar o relatorio final da sessao.
 
+No menu `Configuracoes`, use:
+
+- `Verificar ambiente` para checar Python, pip, Git, estrutura do projeto, dependencias, Nmap e Nuclei.
+- `Instalador assistido` para abrir o fluxo guiado com confirmacao antes de qualquer instalacao.
+- `Verificar Nmap/Nuclei` para revisar somente as ferramentas externas.
+
+## Instalador assistido
+
+```bash
+python scripts/setup_wizard.py
+python scripts/setup_wizard.py --check-only
+python main.py setup check
+python main.py setup tools
+python main.py setup wizard
+```
+
+O assistente nao executa scans. Ele verifica `nmap --version` e `nuclei -version`, detecta `apt`, `dnf`, `pacman` ou `yay`, valida dependencias Python e gera:
+
+```text
+reports/setup/setup_report.txt
+reports/setup/setup_report.json
+```
+
 ## Criar projeto
 
 ```bash

@@ -148,7 +148,34 @@ def test_cli_help_command_shows_navigation(runtime_root, capsys):
     assert "modules list" in captured.out
     assert "scan nmap" in captured.out
     assert "scan nuclei" in captured.out
+    assert "setup check" in captured.out
+    assert "setup_wizard.py" in captured.out
     assert "maintenance clean-temp" in captured.out
+
+
+def test_cli_setup_check_generates_setup_reports(runtime_root, capsys):
+    exit_code, captured = run_cli(capsys, runtime_root, "setup", "check")
+
+    assert exit_code == 0
+    assert "Verificacao de ambiente" in captured.out
+    assert (runtime_root / "reports" / "setup" / "setup_report.txt").exists()
+    assert (runtime_root / "reports" / "setup" / "setup_report.json").exists()
+
+
+def test_cli_setup_tools_shows_nmap_and_nuclei(runtime_root, capsys):
+    exit_code, captured = run_cli(capsys, runtime_root, "setup", "tools")
+
+    assert exit_code == 0
+    assert "Nmap" in captured.out
+    assert "Nuclei" in captured.out
+
+
+def test_cli_setup_wizard_check_mode(runtime_root, capsys):
+    exit_code, captured = run_cli(capsys, runtime_root, "setup", "wizard")
+
+    assert exit_code == 0
+    assert "Instalador assistido" in captured.out
+    assert "Nenhuma instalacao foi executada" in captured.out
 
 
 def test_cli_modules_list_shows_nmap_and_nuclei(runtime_root, capsys):
@@ -286,7 +313,7 @@ def test_cli_uses_environment_root(runtime_root, capsys, monkeypatch):
 
 
 def test_cli_interactive_smoke_covers_menu_paths(runtime_root, capsys, monkeypatch):
-    choices = iter(["13", "14", "15", "x", "0"])
+    choices = iter(["13", "14", "15", "nao", "x", "0"])
     monkeypatch.setattr("builtins.input", lambda _: next(choices))
 
     exit_code = main(["--root", str(runtime_root), "interactive"])
@@ -301,6 +328,54 @@ def test_cli_interactive_smoke_covers_menu_paths(runtime_root, capsys, monkeypat
     assert "nmap_scan" in captured.out
     assert "nuclei_scan" in captured.out
     assert "Status do sistema" in captured.out
+
+
+def test_cli_interactive_development_options_open_cleanly(runtime_root, capsys, monkeypatch):
+    choices = iter(["3", "4", "5", "6", "7", "8", "10", "0"])
+    monkeypatch.setattr("builtins.input", lambda _: next(choices))
+
+    exit_code = main(["--root", str(runtime_root), "interactive"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.out.count("Funcao em desenvolvimento.") >= 7
+    assert "Relatorio final da sessao" in captured.out
+
+
+def test_cli_interactive_settings_submenu_can_return(runtime_root, capsys, monkeypatch):
+    choices = iter(["12", "1", "0", "0"])
+    monkeypatch.setattr("builtins.input", lambda _: next(choices))
+
+    exit_code = main(["--root", str(runtime_root), "interactive"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Configuracoes" in captured.out
+    assert '"app"' in captured.out
+
+
+def test_cli_interactive_settings_environment_check(runtime_root, capsys, monkeypatch):
+    choices = iter(["12", "2", "0", "0"])
+    monkeypatch.setattr("builtins.input", lambda _: next(choices))
+
+    exit_code = main(["--root", str(runtime_root), "interactive"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Verificacao de ambiente" in captured.out
+    assert (runtime_root / "reports" / "setup" / "setup_report.json").exists()
+
+
+def test_cli_interactive_report_center_lists_and_returns(runtime_root, capsys, monkeypatch):
+    choices = iter(["9", "2", "Relatorio funcional", "{}", "0", "0"])
+    monkeypatch.setattr("builtins.input", lambda _: next(choices))
+
+    exit_code = main(["--root", str(runtime_root), "interactive"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Report Center" in captured.out
+    assert '"format": "json"' in captured.out
 
 
 def test_cli_parse_helpers():

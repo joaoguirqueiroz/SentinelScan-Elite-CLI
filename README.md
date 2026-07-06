@@ -9,6 +9,7 @@ Esta implementacao segue os documentos oficiais em `docs/MASTER_PROMPT.md` e `do
 - Bootstrap com validacao do ambiente, criacao de diretorios e inicializacao controlada.
 - CLI com comandos para status, ajuda, configuracoes, projetos, sessoes, modulos, relatorios, plugins, logs e manutencao segura.
 - Interface de terminal com estilo cyber/hacker, paineis, tabelas, mensagens coloridas, Rich quando disponivel, menu organizado, ajuda integrada e barra de progresso.
+- Instalador assistido para verificar Python, pip, Git, dependencias, estrutura do projeto, Nmap, Nuclei, permissoes e capacidade de execucao.
 - Gerenciador de modulos com descoberta automatica, metadados, estados, execucao, eventos e isolamento de falhas.
 - Modulos internos `nmap_scan` e `nuclei_scan` para analises autorizadas com confirmacao obrigatoria.
 - Sistema centralizado de configuracao com valores padrao, validacao e persistencia.
@@ -34,7 +35,7 @@ metric    | value
 ----------+-----------------------
 Aplicacao | SentinelScan Elite CLI
 Versao    | 1.0.0
-Modulos   | 3
+Modulos   | 5
 Plugins   | 1
 Projetos  | 0
 ```
@@ -74,6 +75,9 @@ python main.py interactive
 python main.py modules list
 python main.py plugins list
 python main.py config show
+python main.py setup check
+python main.py setup tools
+python main.py setup wizard
 ```
 
 Criar projeto e sessao:
@@ -114,6 +118,92 @@ python main.py maintenance clean-temp --yes
 ```
 
 O primeiro comando apenas mostra uma simulacao. A limpeza real exige `--yes` e remove somente conteudo descartavel do cache.
+
+## Instalador assistido
+
+O instalador assistido verifica o ambiente local antes da primeira execucao ou durante manutencoes. Ele nao executa scans, nao chama Nmap contra alvos, nao chama Nuclei contra alvos e nao instala nada sem confirmacao explicita.
+
+Executar pelo script principal do assistente:
+
+```bash
+python scripts/setup_wizard.py
+```
+
+Executar apenas em modo verificacao:
+
+```bash
+python scripts/setup_wizard.py --check-only
+```
+
+Executar pela CLI:
+
+```bash
+python main.py setup check
+python main.py setup tools
+python main.py setup wizard
+```
+
+O assistente verifica:
+
+- Python instalado e versao minima do projeto.
+- pip disponivel via `python -m pip --version`.
+- Git disponivel via `git --version`.
+- Existencia de `requirements.txt`.
+- Dependencias Python instaladas e consistentes.
+- Nmap via `nmap --version`.
+- Nuclei via `nuclei -version`.
+- Gerenciador de pacotes disponivel: `apt`, `dnf`, `pacman` ou `yay`.
+- Permissao basica de escrita em `reports/setup/`.
+- Estrutura de pastas do SentinelScan Elite CLI.
+- Arquivos obrigatorios do projeto.
+- Possibilidade de executar `python main.py --version`.
+
+Relatorios gerados:
+
+```text
+reports/setup/setup_report.txt
+reports/setup/setup_report.json
+```
+
+Verificar somente Nmap e Nuclei:
+
+```bash
+python scripts/check_tools.py
+python main.py setup tools
+```
+
+Verificar templates do Nuclei sem executar scans:
+
+```bash
+python scripts/check_tools.py --templates
+python main.py setup tools --templates
+```
+
+Instalacao assistida do Nmap:
+
+- Debian, Ubuntu e Kali: `sudo apt update` e `sudo apt install -y nmap`.
+- Fedora: `sudo dnf install -y nmap`.
+- Arch Linux e Manjaro: `sudo pacman -S nmap`.
+
+Instalacao assistida do Nuclei:
+
+- Quando Go estiver disponivel, o assistente pode usar `go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest`.
+- Quando nao houver metodo confiavel, ele mostra instrucao manual e continua sem quebrar.
+
+Instalar ou atualizar dependencias Python:
+
+```bash
+python scripts/install_dependencies.py --yes
+pip install -r requirements.txt
+```
+
+Erros comuns do instalador:
+
+- `Nmap Ausente`: instale Nmap com o comando da sua distribuicao e rode `nmap --version`.
+- `Nuclei Ausente`: instale Nuclei, confirme o `PATH` e rode `nuclei -version`.
+- `Dependencias Python Precisa de acao manual`: rode `pip install -r requirements.txt`.
+- `Permissoes basicas Erro`: revise permissao de escrita na pasta do projeto.
+- `Estrutura de pastas Erro`: confira se o repositorio foi clonado completo.
 
 ## Uso do Nmap no SentinelScan Elite CLI
 
@@ -403,11 +493,16 @@ python main.py interactive
 No menu principal:
 
 - Digite o numero da opcao e pressione Enter.
-- Use `1` para ver o status.
-- Use `2` para listar modulos.
-- Use `3` para listar projetos.
-- Use `4` para abrir a ajuda de navegacao.
-- Use `5` para simular limpeza de temporarios.
+- Use `1` para abrir Network Recon Autorizado com Nmap.
+- Use `2` para abrir Web Vulnerability Audit com Nuclei.
+- Use `3` a `8` para telas claramente marcadas como funcoes em desenvolvimento.
+- Use `9` para abrir o Report Center.
+- Use `10` para Scan Profile Manager, tambem marcado como funcao em desenvolvimento.
+- Use `11` para consultar historico.
+- Use `12` para Configuracoes, Verificar ambiente, Instalador assistido e Verificar Nmap/Nuclei.
+- Use `13` para listar modulos.
+- Use `14` para abrir ajuda de navegacao.
+- Use `15` para simular e confirmar limpeza segura de temporarios.
 - Use `0` para sair corretamente e visualizar o relatorio final da sessao.
 
 Atalhos e comportamento:
@@ -641,7 +736,7 @@ A licenca do projeto esta em `LICENSE`. Leia esse arquivo antes de redistribuir,
 
 ## Testes
 
-A suite usa `pytest` e cobre nucleo, CLI, configuracao, logs, relatorios, projetos, sessoes, modulos, plugins, utilitarios, erros, integracao, regressao, limpeza segura, Nmap, Nuclei e smoke tests. A validacao atual consolidou 178 testes automatizados.
+A suite usa `pytest` e cobre nucleo, CLI, configuracao, logs, relatorios, projetos, sessoes, modulos, plugins, utilitarios, erros, integracao, regressao, limpeza segura, Nmap, Nuclei, instalador assistido e smoke tests. A validacao atual consolidou 194 testes automatizados.
 
 ```bash
 pytest
@@ -683,12 +778,14 @@ Arquivos principais da suite:
 - `tests/test_cleanup.py`
 - `tests/test_scanner_service.py`
 - `tests/test_scanner_modules.py`
+- `tests/test_setup_service.py`
+- `tests/test_setup_scripts.py`
 
 Todos os testes usam diretorios temporarios isolados para evitar lixo operacional no repositorio.
 
 ## Seguranca e escopo
 
-O projeto foi implementado para fluxos autorizados. Os modulos incluidos nesta versao inicial focam em inventario informado pelo usuario, saude do runtime e resumo de projetos, evitando operacoes intrusivas ou ofensivas.
+O projeto foi implementado para fluxos autorizados. Inventario, saude do runtime, resumo de projetos, Nmap e Nuclei foram integrados com validacao de entrada, confirmacao obrigatoria, comandos montados sem `shell=True`, relatorios e historico. Qualquer uso deve ocorrer apenas em ambientes proprios, laboratorios, redes internas ou ativos com autorizacao explicita.
 
 ## Documentacao
 

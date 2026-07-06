@@ -16,7 +16,13 @@ Todas as mudancas relevantes do SentinelScan Elite CLI serao registradas neste a
 - Historico interno enriquecido com funcao executada, data/hora, resultado e erro tecnico quando houver.
 - Relatorio final da sessao no encerramento do modo interativo, incluindo tempo total, modulos usados, relatorios criados e erros encontrados.
 - Servico e comando de limpeza segura de temporarios, com simulacao por padrao e confirmacao explicita via `--yes`.
-- Suite ampliada para 178 testes automatizados, cobrindo os novos fluxos de CLI, relatorios, configuracao, historico, limpeza, Nmap, Nuclei e resumo de sessao.
+- Instalador assistido com verificacao de Python, pip, Git, dependencias, estrutura de pastas, arquivos obrigatorios, permissoes, Nmap e Nuclei.
+- Scripts auxiliares `scripts/setup_wizard.py`, `scripts/check_tools.py`, `scripts/install_dependencies.py`, `scripts/setup_report.py` e `scripts/__init__.py`.
+- Comandos `setup check`, `setup tools` e `setup wizard` para verificar ambiente, ferramentas e abrir o assistente pela CLI.
+- Relatorios de setup em `reports/setup/setup_report.txt` e `reports/setup/setup_report.json`.
+- Submenu de configuracoes com `Verificar ambiente`, `Instalador assistido` e `Verificar Nmap/Nuclei`.
+- Documento `docs/FUNCTIONAL_AUDIT.md` com matriz funcional opcao por opcao.
+- Suite ampliada para 194 testes automatizados, cobrindo os novos fluxos de CLI, relatorios, configuracao, historico, limpeza, Nmap, Nuclei, instalador assistido, scripts e resumo de sessao.
 - Arquivo `requirements.txt` raiz apontando para as dependencias de execucao.
 - Dependencia `rich` para experiencia visual profissional em terminais compativeis, com fallback ASCII.
 
@@ -26,13 +32,18 @@ Todas as mudancas relevantes do SentinelScan Elite CLI serao registradas neste a
 - Tratamento de erros para Nmap/Nuclei ausentes, alvos invalidos, timeout, saida vazia, parsing XML/JSONL e templates/configuracoes invalidas.
 - README com secao completa "Como executar no Linux", comandos por distribuicao, primeira execucao, atualizacao, solucao de problemas, FAQ, desenvolvimento e licenca.
 - README com secoes dedicadas ao uso de Nmap e Nuclei no SentinelScan Elite CLI.
+- README com secao "Instalador assistido", incluindo execucao, verificacoes, Nmap, Nuclei, relatorios e erros comuns.
 - Guia de testes atualizado com a cobertura dos novos componentes.
+- Navegacao interativa revisada para que todas as opcoes do menu principal abram uma tela, executem um fluxo implementado ou informem claramente "Funcao em desenvolvimento".
 
 ### Corrigido
 
 - Saida de status preserva o caminho completo do projeto mesmo quando o painel visual quebra linhas longas.
 - Validacao de configuracao agora aceita todos os formatos de relatorio suportados.
 - Opcao "Listar modulos" agora usa renderizacao dedicada, mostra Nmap/Nuclei, informa estado/categoria/versao e exibe mensagem amigavel quando nao ha modulos carregados.
+- Opcoes `4`, `5`, `6`, `7`, `8` e `10` do menu interativo deixaram de cair como invalidas e agora exibem status funcional claro.
+- Fluxo interativo de limpeza agora mostra aviso, simula, pede confirmacao e permite cancelar sem apagar arquivos.
+- Fluxo interativo de relatorios agora abre o Report Center, lista relatorios e permite gerar relatorio manual com validacao JSON.
 
 ## [1.0.0] - 2026-07-06
 

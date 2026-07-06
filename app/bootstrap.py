@@ -22,6 +22,7 @@ from services.project_service import ProjectService
 from services.report_service import ReportService
 from services.scanner_service import ScannerService
 from services.session_service import SessionService
+from services.setup_service import SetupService
 from services.storage import ensure_dir
 
 
@@ -74,6 +75,7 @@ class Bootstrapper:
             audit=audit_service,
         )
         scanner_service = ScannerService(root_path=self.root_path, settings=settings)
+        setup_service = SetupService(root_path=self.root_path)
 
         context.project_service = project_service
         context.session_service = session_service
@@ -81,6 +83,7 @@ class Bootstrapper:
         context.history_service = history_service
         context.cleanup_service = cleanup_service
         context.scanner_service = scanner_service
+        context.setup_service = setup_service
 
         module_manager = ModuleManager(context, event_bus)
         plugin_manager = PluginManager(context, event_bus)

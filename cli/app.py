@@ -36,6 +36,8 @@ def main(argv: list[str] | None = None) -> int:
             renderer.print_status(application.status())
         elif command == "help":
             renderer.print_help()
+        elif command == "setup":
+            _handle_setup(args, context, renderer)
         elif command == "config":
             _handle_config(args, context, renderer)
         elif command == "projects":
@@ -102,6 +104,38 @@ def _handle_config(args: Any, context: Any, renderer: TerminalRenderer) -> None:
         context.config_service.reset()
         context.audit_service.record("config.reset", target="settings")
         print(success("Configuration restored to defaults."))
+
+
+def _handle_setup(args: Any, context: Any, renderer: TerminalRenderer) -> None:
+    if args.setup_command == "check":
+        report = context.setup_service.run_checks(include_templates=args.templates)
+        renderer.print_setup_report(report.to_dict())
+        context.history_service.record_action(
+            "setup.check",
+            result=report.overall_status,
+            details={"checks": len(report.checks), "report_paths": report.report_paths},
+        )
+    elif args.setup_command == "tools":
+        report = context.setup_service.run_tool_checks(include_templates=args.templates)
+        renderer.print_setup_report(report.to_dict())
+        context.history_service.record_action(
+            "setup.tools",
+            result=report.overall_status,
+            details={"checks": len(report.checks), "report_paths": report.report_paths},
+        )
+    elif args.setup_command == "wizard":
+        report = _run_assisted_setup(
+            context,
+            renderer,
+            ask_to_install=args.install,
+            assume_yes=args.yes,
+            include_templates=args.templates,
+        )
+        context.history_service.record_action(
+            "setup.wizard",
+            result=report.overall_status,
+            details={"checks": len(report.checks), "report_paths": report.report_paths},
+        )
 
 
 def _handle_projects(args: Any, context: Any, renderer: TerminalRenderer) -> None:
@@ -273,14 +307,14 @@ def _interactive(
                 [
                     "1. Network Recon Autorizado (Nmap)",
                     "2. Web Vulnerability Audit (Nuclei)",
-                    "3. API Security Audit",
-                    "4. SSL/TLS Inspector",
-                    "5. CVE Intelligence",
-                    "6. Linux Hardening Audit",
-                    "7. Log Threat Analyzer",
-                    "8. OSINT Tecnico",
+                    "3. API Security Audit (em desenvolvimento)",
+                    "4. SSL/TLS Inspector (em desenvolvimento)",
+                    "5. CVE Intelligence (em desenvolvimento)",
+                    "6. Linux Hardening Audit (em desenvolvimento)",
+                    "7. Log Threat Analyzer (em desenvolvimento)",
+                    "8. OSINT Tecnico (em desenvolvimento)",
                     "9. Report Center",
-                    "10. Scan Profile Manager",
+                    "10. Scan Profile Manager (em desenvolvimento)",
                     "11. Historico",
                     "12. Configuracoes",
                     "13. Listar modulos",
@@ -299,20 +333,29 @@ def _interactive(
             _interactive_nmap(context, renderer)
         elif choice == "2":
             _interactive_nuclei(context, renderer)
-        elif choice == "3":
-            print("API Security Audit sera expandido em uma versao futura.")
+        elif choice in {"3", "4", "5", "6", "7", "8", "10"}:
+            feature_names = {
+                "3": "API Security Audit",
+                "4": "SSL/TLS Inspector",
+                "5": "CVE Intelligence",
+                "6": "Linux Hardening Audit",
+                "7": "Log Threat Analyzer",
+                "8": "OSINT Tecnico",
+                "10": "Scan Profile Manager",
+            }
+            _feature_in_development(context, renderer, feature_names[choice])
         elif choice == "9":
-            _handle_reports(SimpleNamespace(reports_command="list"), context, renderer)
+            _interactive_reports(context, renderer)
         elif choice == "11":
             renderer.print_history(context.history_service.read_recent(20))
         elif choice == "12":
-            renderer.print_json(context.config_service.get())
+            _interactive_settings(context, renderer)
         elif choice == "13":
             renderer.print_modules(context.module_manager.list_modules())
         elif choice == "14":
             renderer.print_help()
         elif choice == "15":
-            renderer.print_clean_result(context.cleanup_service.preview().to_dict())
+            _interactive_cleanup(context, renderer)
         elif choice.lower() == "status":
             renderer.print_dashboard(application.status())
         elif choice == "p":
@@ -322,6 +365,167 @@ def _interactive(
             )
         else:
             print("Opcao invalida.")
+
+
+def _feature_in_development(context: Any, renderer: TerminalRenderer, name: str) -> None:
+    renderer.print_panel(
+        name,
+        [
+            "Funcao em desenvolvimento.",
+            "A opcao abre corretamente, nao executa acoes incompletas e retorna ao menu principal.",
+            "Use os comandos ja implementados para Nmap, Nuclei, relatorios, modulos, historico e configuracoes.",
+        ],
+        style="yellow",
+    )
+    context.history_service.record_action(
+        f"interactive.{name.lower().replace(' ', '_')}",
+        result="development",
+        details={"status": "function_in_development"},
+    )
+
+
+def _interactive_reports(context: Any, renderer: TerminalRenderer) -> None:
+    while True:
+        print(
+            renderer.panel(
+                "Report Center",
+                [
+                    "1. Listar relatorios",
+                    "2. Gerar relatorio manual",
+                    "0. Voltar",
+                ],
+            )
+        )
+        choice = input("> ").strip()
+        if choice == "0":
+            return
+        if choice == "1":
+            _handle_reports(SimpleNamespace(reports_command="list"), context, renderer)
+        elif choice == "2":
+            title = input("Titulo [Relatorio manual]: ").strip() or "Relatorio manual"
+            raw_data = input("Dados JSON [{}]: ").strip() or "{}"
+            try:
+                _handle_reports(
+                    SimpleNamespace(
+                        reports_command="generate",
+                        title=title,
+                        project=None,
+                        session=None,
+                        format="json",
+                        data=raw_data,
+                    ),
+                    context,
+                    renderer,
+                )
+            except ValidationError as exc:
+                print(error(f"Dados invalidos: {exc}"))
+        else:
+            print("Opcao invalida.")
+
+
+def _interactive_cleanup(context: Any, renderer: TerminalRenderer) -> None:
+    renderer.print_panel(
+        "Limpeza de temporarios",
+        [
+            "A limpeza afeta apenas cache e arquivos descartaveis.",
+            "Relatorios, logs, projetos, sessoes e dados persistentes sao preservados.",
+        ],
+        style="yellow",
+    )
+    renderer.print_clean_result(context.cleanup_service.preview().to_dict())
+    if not _confirm("Confirmar limpeza segura dos temporarios?", assume_yes=False):
+        print(warning("Limpeza cancelada. Nenhum arquivo foi apagado."))
+        context.history_service.record_action(
+            "cleanup.temp",
+            result="cancelled",
+            details={"source": "interactive"},
+        )
+        return
+    result = context.cleanup_service.clean(dry_run=False)
+    renderer.print_clean_result(result.to_dict())
+    context.history_service.record_action(
+        "cleanup.temp",
+        result="success",
+        details=result.to_dict(),
+    )
+
+
+def _interactive_settings(context: Any, renderer: TerminalRenderer) -> None:
+    while True:
+        print(
+            renderer.panel(
+                "Configuracoes",
+                [
+                    "1. Ver configuracao atual",
+                    "2. Verificar ambiente",
+                    "3. Instalador assistido",
+                    "4. Verificar Nmap/Nuclei",
+                    "0. Voltar",
+                ],
+            )
+        )
+        choice = input("> ").strip()
+        if choice == "0":
+            return
+        if choice == "1":
+            renderer.print_json(context.config_service.get())
+        elif choice == "2":
+            report = context.setup_service.run_checks()
+            renderer.print_setup_report(report.to_dict())
+            context.history_service.record_action(
+                "setup.check",
+                result=report.overall_status,
+                details={"source": "interactive-settings"},
+            )
+        elif choice == "3":
+            _run_assisted_setup(context, renderer, ask_to_install=True)
+        elif choice == "4":
+            report = context.setup_service.run_tool_checks()
+            renderer.print_setup_report(report.to_dict())
+            context.history_service.record_action(
+                "setup.tools",
+                result=report.overall_status,
+                details={"source": "interactive-settings"},
+            )
+        else:
+            print("Opcao invalida.")
+
+
+def _run_assisted_setup(
+    context: Any,
+    renderer: TerminalRenderer,
+    ask_to_install: bool = False,
+    assume_yes: bool = False,
+    include_templates: bool = False,
+) -> Any:
+    renderer.print_panel(
+        "Instalador assistido",
+        [
+            "Sera feita uma verificacao segura do ambiente.",
+            "Nenhum scan sera executado.",
+            "Instalacoes so acontecem com confirmacao explicita.",
+        ],
+        style="cyan",
+    )
+    report = context.setup_service.run_checks(include_templates=include_templates)
+    renderer.print_setup_report(report.to_dict())
+    if not ask_to_install:
+        print(warning("Modo verificacao. Nenhuma instalacao foi executada."))
+        return report
+
+    missing = {check.name.lower(): check for check in report.checks if check.status in {"Ausente", "Precisa de acao manual", "Erro"}}
+    if "dependencias python" in missing and _confirm("Instalar/atualizar dependencias Python?", assume_yes):
+        result = context.setup_service.install_python_dependencies()
+        print(_format_command_result(result.to_dict()))
+    if "nmap" in missing and _confirm("Instalar Nmap usando o gerenciador detectado?", assume_yes):
+        for result in context.setup_service.install_nmap():
+            print(_format_command_result(result.to_dict()))
+    if "nuclei" in missing and _confirm("Instalar Nuclei usando Go, se disponivel?", assume_yes):
+        for result in context.setup_service.install_nuclei():
+            print(_format_command_result(result.to_dict()))
+    rerun = context.setup_service.run_checks(include_templates=include_templates)
+    renderer.print_setup_report(rerun.to_dict())
+    return rerun
 
 
 def _interactive_nmap(context: Any, renderer: TerminalRenderer) -> None:
@@ -402,11 +606,29 @@ def _command_name(args: Any) -> str:
         "plugins_command",
         "logs_command",
         "maintenance_command",
+        "setup_command",
     ):
         value = getattr(args, attribute, None)
         if value:
             parts.append(value)
     return "cli." + ".".join(parts)
+
+
+def _confirm(question: str, assume_yes: bool = False) -> bool:
+    if assume_yes:
+        print(f"{question} [sim]")
+        return True
+    answer = input(f"{question} [sim/nao]: ").strip().lower()
+    return answer in {"s", "sim", "y", "yes"}
+
+
+def _format_command_result(result: dict[str, Any]) -> str:
+    command = " ".join(result.get("command") or ["acao-manual"])
+    status = result.get("return_code")
+    if status == 0:
+        return success(f"Comando concluido: {command}")
+    details = result.get("stderr") or result.get("stdout") or "Falha sem detalhes."
+    return warning(f"Comando requer atencao ({status}): {command} | {details}")
 
 
 def _record_history(

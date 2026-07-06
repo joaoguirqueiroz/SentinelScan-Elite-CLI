@@ -21,6 +21,17 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("interactive", help="Open the guided terminal menu.")
     subparsers.add_parser("help", help="Show navigation and command guidance.")
 
+    setup = subparsers.add_parser("setup", help="Run environment checks and assisted setup.")
+    setup_sub = setup.add_subparsers(dest="setup_command", required=True)
+    setup_check = setup_sub.add_parser("check", help="Verify Python, pip, Git, project files, Nmap, and Nuclei.")
+    setup_check.add_argument("--templates", action="store_true", help="Also verify Nuclei templates.")
+    setup_tools = setup_sub.add_parser("tools", help="Verify only Nmap and Nuclei related tools.")
+    setup_tools.add_argument("--templates", action="store_true", help="Also verify Nuclei templates.")
+    setup_wizard = setup_sub.add_parser("wizard", help="Open the assisted setup flow.")
+    setup_wizard.add_argument("--install", action="store_true", help="Ask before installing missing tools.")
+    setup_wizard.add_argument("--yes", action="store_true", help="Confirm installer prompts automatically.")
+    setup_wizard.add_argument("--templates", action="store_true", help="Also verify Nuclei templates.")
+
     config = subparsers.add_parser("config", help="Manage central configuration.")
     config_sub = config.add_subparsers(dest="config_command", required=True)
     config_sub.add_parser("show", help="Show all configuration.")
