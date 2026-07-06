@@ -72,6 +72,18 @@ def test_report_service_organizes_reports_by_project_date_and_session(runtime_ro
     assert path.exists()
 
 
+def test_report_service_organizes_tool_reports(runtime_root, context):
+    record = context.report_service.generate_report(
+        "Nmap",
+        {"success": True, "status": "ok", "data": {}},
+        report_format="json",
+        tool="nmap",
+    )
+
+    assert "nmap" in record.path
+    assert (runtime_root / record.path).exists()
+
+
 def test_report_service_rejects_unsupported_format(context):
     with pytest.raises(ReportError):
         context.report_service.generate_report("Bad", {}, report_format="pdf")

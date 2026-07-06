@@ -6,6 +6,7 @@ import os
 import pytest
 
 from cli.messages import error, success, warning
+from cli.interface import TerminalRenderer
 from cli.tables import format_table
 from services.history_service import HistoryService
 from services.storage import append_jsonl, ensure_dir, read_json, write_json
@@ -52,6 +53,13 @@ def test_cli_message_helpers():
     assert success("done") == "[OK] done"
     assert warning("check") == "[WARN] check"
     assert error("bad") == "[ERROR] bad"
+
+
+def test_terminal_renderer_modules_empty_message(capsys):
+    TerminalRenderer().print_modules([])
+    captured = capsys.readouterr()
+
+    assert "Nenhum modulo carregado" in captured.out
 
 
 def test_history_service_records_result_error_and_function(tmp_path):

@@ -7,6 +7,7 @@ import os
 import sys
 import traceback
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from app.application import SentinelScanApplication
@@ -43,6 +44,8 @@ def main(argv: list[str] | None = None) -> int:
             _handle_sessions(args, context, renderer)
         elif command == "modules":
             _handle_modules(args, context, renderer)
+        elif command == "scan":
+            _handle_scan(args, context, renderer)
         elif command == "reports":
             _handle_reports(args, context, renderer)
         elif command == "plugins":
@@ -137,10 +140,7 @@ def _handle_sessions(args: Any, context: Any, renderer: TerminalRenderer) -> Non
 
 def _handle_modules(args: Any, context: Any, renderer: TerminalRenderer) -> None:
     if args.modules_command == "list":
-        renderer.print_table(
-            context.module_manager.list_modules(),
-            ["id", "name", "category", "version", "state", "description"],
-        )
+        renderer.print_modules(context.module_manager.list_modules())
     elif args.modules_command == "run":
         context.permission_manager.require("modules:run")
         parameters = _parse_params(args.param)
@@ -168,6 +168,54 @@ def _handle_modules(args: Any, context: Any, renderer: TerminalRenderer) -> None
                 or context.config_service.get("reports.default_format", "markdown"),
             )
             print(success(f"Report generated: {record.path}"))
+
+
+def _handle_scan(args: Any, context: Any, renderer: TerminalRenderer) -> None:
+    context.permission_manager.require("modules:run")
+    if args.scan_command == "nmap":
+        parameters = {
+            "target": args.target,
+            "profile": args.profile,
+            "ports": args.ports,
+            "timeout": args.timeout,
+            "custom_flags": args.custom_flag,
+            "authorized": args.authorize,
+            "extra_confirmed": args.extra_confirm,
+            "report_formats": args.formats,
+        }
+        result = context.module_manager.execute(
+            "nmap_scan",
+            ModuleExecutionContext(
+                application=context,
+                parameters=parameters,
+                project_id=args.project,
+                session_id=args.session,
+            ),
+        )
+        renderer.print_scan_result(result.to_dict())
+    elif args.scan_command == "nuclei":
+        parameters = {
+            "targets": args.target,
+            "profile": args.profile,
+            "templates": args.template,
+            "timeout": args.timeout,
+            "concurrency": args.concurrency,
+            "rate_limit": args.rate_limit,
+            "max_targets": args.max_targets,
+            "authorized": args.authorize,
+            "extra_confirmed": args.extra_confirm,
+            "report_formats": args.formats,
+        }
+        result = context.module_manager.execute(
+            "nuclei_scan",
+            ModuleExecutionContext(
+                application=context,
+                parameters=parameters,
+                project_id=args.project,
+                session_id=args.session,
+            ),
+        )
+        renderer.print_scan_result(result.to_dict())
 
 
 def _handle_reports(args: Any, context: Any, renderer: TerminalRenderer) -> None:
@@ -216,19 +264,29 @@ def _handle_maintenance(args: Any, context: Any, renderer: TerminalRenderer) -> 
 def _interactive(
     application: SentinelScanApplication, context: Any, renderer: TerminalRenderer
 ) -> None:
-    renderer.print_banner()
+    renderer.print_dashboard(application.status())
     print("Modo interativo")
     while True:
         print(
             renderer.panel(
                 "Menu principal",
                 [
-                    "1. Status",
-                    "2. Listar modulos",
-                    "3. Listar projetos",
-                    "4. Ajuda e navegacao",
-                    "5. Simular limpeza de temporarios",
-                    "0. Sair corretamente",
+                    "1. Network Recon Autorizado (Nmap)",
+                    "2. Web Vulnerability Audit (Nuclei)",
+                    "3. API Security Audit",
+                    "4. SSL/TLS Inspector",
+                    "5. CVE Intelligence",
+                    "6. Linux Hardening Audit",
+                    "7. Log Threat Analyzer",
+                    "8. OSINT Tecnico",
+                    "9. Report Center",
+                    "10. Scan Profile Manager",
+                    "11. Historico",
+                    "12. Configuracoes",
+                    "13. Listar modulos",
+                    "14. Ajuda",
+                    "15. Simular limpeza de temporarios",
+                    "0. Sair",
                 ],
             )
         )
@@ -238,23 +296,98 @@ def _interactive(
             print("Encerrando.")
             return
         if choice == "1":
-            renderer.print_json(context.resource_monitor.snapshot())
+            _interactive_nmap(context, renderer)
         elif choice == "2":
-            renderer.print_table(
-                context.module_manager.list_modules(),
-                ["id", "name", "category", "version", "state"],
-            )
+            _interactive_nuclei(context, renderer)
         elif choice == "3":
+            print("API Security Audit sera expandido em uma versao futura.")
+        elif choice == "9":
+            _handle_reports(SimpleNamespace(reports_command="list"), context, renderer)
+        elif choice == "11":
+            renderer.print_history(context.history_service.read_recent(20))
+        elif choice == "12":
+            renderer.print_json(context.config_service.get())
+        elif choice == "13":
+            renderer.print_modules(context.module_manager.list_modules())
+        elif choice == "14":
+            renderer.print_help()
+        elif choice == "15":
+            renderer.print_clean_result(context.cleanup_service.preview().to_dict())
+        elif choice.lower() == "status":
+            renderer.print_dashboard(application.status())
+        elif choice == "p":
             renderer.print_table(
                 [project.to_dict() for project in context.project_service.list_projects()],
                 ["id", "name", "status", "updated_at"],
             )
-        elif choice == "4":
-            renderer.print_help()
-        elif choice == "5":
-            renderer.print_clean_result(context.cleanup_service.preview().to_dict())
         else:
             print("Opcao invalida.")
+
+
+def _interactive_nmap(context: Any, renderer: TerminalRenderer) -> None:
+    renderer.print_panel(
+        "Analise com Nmap",
+        [
+            "Ferramenta para reconhecimento de rede autorizado.",
+            "Perfis: quick, basic, services, ports, custom.",
+            "A execucao exige confirmacao de autorizacao.",
+        ],
+        style="cyan",
+    )
+    target = input("Alvo autorizado: ").strip()
+    profile = input("Perfil [basic]: ").strip() or "basic"
+    ports = input("Portas (apenas para perfil ports/custom, opcional): ").strip() or None
+    authorization = input("Confirmo que tenho autorizacao? [sim/nao]: ").strip()
+    extra = "nao"
+    if profile.lower() in {"custom", "personalizado"}:
+        extra = input("Confirmacao extra para perfil personalizado? [sim/nao]: ").strip()
+    result = context.module_manager.execute(
+        "nmap_scan",
+        ModuleExecutionContext(
+            application=context,
+            parameters={
+                "target": target,
+                "profile": profile,
+                "ports": ports,
+                "authorized": authorization,
+                "extra_confirmed": extra,
+            },
+        ),
+    )
+    renderer.print_scan_result(result.to_dict())
+
+
+def _interactive_nuclei(context: Any, renderer: TerminalRenderer) -> None:
+    renderer.print_panel(
+        "Analise com Nuclei",
+        [
+            "Ferramenta para auditoria web autorizada com templates controlados.",
+            "Perfis: basic, technologies, exposure, low-medium, high, custom.",
+            "Perfis high/custom exigem confirmacao extra.",
+        ],
+        style="cyan",
+    )
+    targets = input("Alvo(s) autorizados separados por virgula: ").strip()
+    profile = input("Perfil [basic]: ").strip() or "basic"
+    templates = input("Templates customizados separados por virgula (opcional): ").strip()
+    authorization = input("Confirmo que tenho autorizacao? [sim/nao]: ").strip()
+    extra = "nao"
+    if profile.lower() in {"high", "alta", "custom", "personalizado"}:
+        extra = input("Confirmacao extra para perfil avancado/personalizado? [sim/nao]: ").strip()
+    result = context.module_manager.execute(
+        "nuclei_scan",
+        ModuleExecutionContext(
+            application=context,
+            parameters={
+                "targets": targets,
+                "profile": profile,
+                "templates": templates,
+                "authorized": authorization,
+                "extra_confirmed": extra,
+            },
+        ),
+    )
+    renderer.print_scan_result(result.to_dict())
 
 
 def _command_name(args: Any) -> str:
@@ -264,6 +397,7 @@ def _command_name(args: Any) -> str:
         "projects_command",
         "sessions_command",
         "modules_command",
+        "scan_command",
         "reports_command",
         "plugins_command",
         "logs_command",

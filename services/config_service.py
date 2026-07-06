@@ -32,6 +32,16 @@ FALLBACK_CONFIG: dict[str, Any] = {
     "reports": {"default_format": "markdown", "template": "technical"},
     "security": {"active_profile": "administrator"},
     "performance": {"max_tasks": 4, "cache_enabled": True},
+    "scanners": {
+        "defaults": {
+            "timeout": 60,
+            "concurrency": 5,
+            "rate_limit": 25,
+            "max_targets": 25,
+        },
+        "nmap": {"default_profile": "basic"},
+        "nuclei": {"default_profile": "basic"},
+    },
     "modules": {},
     "plugins": {},
 }
@@ -77,6 +87,22 @@ class ConfigService:
         report_format = config["reports"].get("default_format")
         if report_format not in self.VALID_REPORT_FORMATS:
             config["reports"]["default_format"] = "markdown"
+        scanner_defaults = config.setdefault("scanners", {}).setdefault("defaults", {})
+        scanner_defaults["timeout"] = self._positive_int(
+            scanner_defaults.get("timeout"), FALLBACK_CONFIG["scanners"]["defaults"]["timeout"]
+        )
+        scanner_defaults["concurrency"] = self._positive_int(
+            scanner_defaults.get("concurrency"),
+            FALLBACK_CONFIG["scanners"]["defaults"]["concurrency"],
+        )
+        scanner_defaults["rate_limit"] = self._positive_int(
+            scanner_defaults.get("rate_limit"),
+            FALLBACK_CONFIG["scanners"]["defaults"]["rate_limit"],
+        )
+        scanner_defaults["max_targets"] = self._positive_int(
+            scanner_defaults.get("max_targets"),
+            FALLBACK_CONFIG["scanners"]["defaults"]["max_targets"],
+        )
         for key, value in config.get("paths", {}).items():
             ensure_relative_path(str(value), f"paths.{key}")
         return config
@@ -138,3 +164,10 @@ class ConfigService:
             else:
                 base[key] = value
         return base
+
+    def _positive_int(self, value: Any, fallback: int) -> int:
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return fallback
+        return parsed if parsed > 0 else fallback

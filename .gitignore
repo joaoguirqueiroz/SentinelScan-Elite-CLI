@@ -6,7 +6,7 @@ htmlcov/
 .venv/
 venv/
 env/
-
+*.tmp
 logs/*.log
 logs/*.jsonl
 logs/*.log.*
@@ -18,4 +18,3 @@ data/**
 !data/.gitkeep
 backups/**
 !backups/.gitkeep
-

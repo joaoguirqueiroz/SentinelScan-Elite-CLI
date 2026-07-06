@@ -70,14 +70,15 @@ class ReportService:
         session_id: str | None = None,
         report_format: str = "markdown",
         template: str = "technical",
+        tool: str | None = None,
     ) -> ReportRecord:
         if report_format not in self.SUPPORTED_FORMATS:
             raise ReportError(f"Unsupported report format '{report_format}'.")
         report_id = f"report-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}-{uuid4().hex[:8]}"
-        report_dir = self._target_dir(project_id, session_id)
+        report_dir = self._target_dir(project_id, session_id, tool)
         extension = self.EXTENSIONS[report_format]
         report_path = report_dir / f"{report_id}.{extension}"
-        payload = self._payload(report_id, title, results, project_id, session_id, template)
+        payload = self._payload(report_id, title, results, project_id, session_id, template, tool)
         if report_format == "markdown":
             report_path.write_text(self._render_markdown(payload), encoding="utf-8")
         elif report_format == "txt":
@@ -104,7 +105,12 @@ class ReportService:
         self._audit(
             "report.generated",
             report_id,
-            {"project_id": project_id, "session_id": session_id, "format": report_format},
+            {
+                "project_id": project_id,
+                "session_id": session_id,
+                "format": report_format,
+                "tool": tool,
+            },
         )
         return record
 
@@ -112,10 +118,17 @@ class ReportService:
         index = read_json(self.index_path, default=[]) or []
         return [ReportRecord(**payload) for payload in index]
 
-    def _target_dir(self, project_id: str | None, session_id: str | None) -> Path:
+    def tool_output_dir(
+        self, project_id: str | None, session_id: str | None, tool: str
+    ) -> Path:
+        return self._target_dir(project_id, session_id, tool)
+
+    def _target_dir(self, project_id: str | None, session_id: str | None, tool: str | None = None) -> Path:
         date_path = datetime.now(timezone.utc).strftime("%Y/%m/%d")
         session_path = session_id or "sessionless"
         root = self.reports_dir / (project_id or "global") / date_path / session_path
+        if tool:
+            root = root / tool
         return ensure_dir(root)
 
     def _payload(
@@ -126,6 +139,7 @@ class ReportService:
         project_id: str | None,
         session_id: str | None,
         template: str,
+        tool: str | None,
     ) -> dict[str, Any]:
         return {
             "metadata": {
@@ -137,6 +151,9 @@ class ReportService:
                 "generated_at": utc_now(),
                 "project_id": project_id,
                 "session_id": session_id,
+                "tool": tool,
+                "ethical_notice": "Use only on owned, authorized, or lab environments.",
+                "developed_by": "Joao Guilherme",
             },
             "executive_summary": {
                 "status": results.get("status", "completed"),
@@ -158,7 +175,11 @@ class ReportService:
             f"- Identificador: {metadata['id']}\n"
             f"- Projeto: {metadata.get('project_id') or 'global'}\n"
             f"- Sessao: {metadata.get('session_id') or 'nao vinculada'}\n"
+            f"- Ferramenta: {metadata.get('tool') or 'geral'}\n"
+            f"- Desenvolvido por: {metadata.get('developed_by')}\n"
             f"- Gerado em: {metadata['generated_at']}\n\n"
+            f"## Aviso de Uso Autorizado\n\n"
+            f"{metadata.get('ethical_notice')}\n\n"
             f"## Resumo Executivo\n\n"
             f"- Status: {summary['status']}\n"
             f"- Sucesso: {summary['success']}\n"
@@ -180,7 +201,11 @@ class ReportService:
             f"Identificador: {metadata['id']}\n"
             f"Projeto: {metadata.get('project_id') or 'global'}\n"
             f"Sessao: {metadata.get('session_id') or 'nao vinculada'}\n"
+            f"Ferramenta: {metadata.get('tool') or 'geral'}\n"
+            f"Desenvolvido por: {metadata.get('developed_by')}\n"
             f"Gerado em: {metadata['generated_at']}\n\n"
+            "AVISO DE USO AUTORIZADO\n"
+            f"{metadata.get('ethical_notice')}\n\n"
             "RESUMO EXECUTIVO\n"
             f"Status: {summary['status']}\n"
             f"Sucesso: {summary['success']}\n"

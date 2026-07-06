@@ -1,0 +1,483 @@
+"""Safe wrappers for authorized Nmap and Nuclei execution."""
+
+from __future__ import annotations
+
+import ipaddress
+import json
+import re
+import shutil
+import subprocess
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+from urllib.parse import urlparse
+from xml.etree import ElementTree
+
+from core.exceptions import ValidationError
+from services.storage import ensure_dir
+
+
+AUTHORIZED_USE_NOTICE = (
+    "Confirme que voce possui autorizacao para analisar este alvo. "
+    "Use esta ferramenta apenas em ambientes proprios, laboratorios, redes internas "
+    "ou ativos autorizados."
+)
+
+ETHICAL_NOTICE = (
+    "Use esta ferramenta apenas em redes, sistemas, sites e APIs proprios, autorizados "
+    "ou ambientes de laboratorio. O uso contra terceiros sem autorizacao e proibido."
+)
+
+DOMAIN_PATTERN = re.compile(
+    r"^(?=.{1,253}$)(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[A-Za-z]{2,63}$"
+)
+PORTS_PATTERN = re.compile(r"^[0-9,-]{1,128}$")
+
+
+class ScannerError(Exception):
+    """Base class for scanner service failures."""
+
+
+class ScannerToolUnavailable(ScannerError):
+    """Raised when the requested external scanner is not installed."""
+
+
+class ScannerExecutionError(ScannerError):
+    """Raised when a scanner process exits unsuccessfully."""
+
+
+class ScannerTimeoutError(ScannerError):
+    """Raised when a scanner process times out."""
+
+
+class ScannerParseError(ScannerError):
+    """Raised when scanner output cannot be parsed."""
+
+
+@dataclass(frozen=True)
+class ScannerCommand:
+    tool: str
+    args: list[str]
+    profile: str
+    timeout: int
+    output_files: dict[str, str] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class ScannerExecution:
+    tool: str
+    profile: str
+    command: list[str]
+    return_code: int
+    output_files: dict[str, str]
+    parsed: dict[str, Any] = field(default_factory=dict)
+    started_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    finished_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+class ScannerService:
+    """Validates targets, builds safe commands, executes tools, and parses output."""
+
+    NMAP_PROFILE_ALIASES = {
+        "quick": "quick",
+        "rapido": "quick",
+        "basic": "basic",
+        "basico": "basic",
+        "services": "services",
+        "servicos": "services",
+        "ports": "ports",
+        "portas": "ports",
+        "custom": "custom",
+        "personalizado": "custom",
+    }
+    NMAP_CUSTOM_FLAGS = {"-sV", "--version-light", "-Pn", "-F"}
+
+    NUCLEI_PROFILE_ALIASES = {
+        "basic": "basic",
+        "basico": "basic",
+        "technologies": "technologies",
+        "tecnologias": "technologies",
+        "exposure": "exposure",
+        "exposicao": "exposure",
+        "low-medium": "low-medium",
+        "baixa-media": "low-medium",
+        "high": "high",
+        "alta": "high",
+        "custom": "custom",
+        "personalizado": "custom",
+    }
+    NUCLEI_SEVERITIES = {"info", "low", "medium", "high", "critical"}
+
+    def __init__(self, root_path: Path, settings: dict[str, Any] | None = None) -> None:
+        self.root_path = root_path.resolve()
+        self.settings = settings or {}
+
+    def is_installed(self, binary: str) -> bool:
+        return shutil.which(binary) is not None
+
+    def default_limits(self) -> dict[str, int]:
+        defaults = self.settings.get("scanners", {}).get("defaults", {})
+        return {
+            "timeout": self._positive_int(defaults.get("timeout"), 60, "timeout"),
+            "concurrency": self._positive_int(defaults.get("concurrency"), 5, "concurrency"),
+            "rate_limit": self._positive_int(defaults.get("rate_limit"), 25, "rate_limit"),
+            "max_targets": self._positive_int(defaults.get("max_targets"), 25, "max_targets"),
+        }
+
+    def normalize_nmap_profile(self, value: str | None) -> str:
+        return self._normalize_profile(value or "basic", self.NMAP_PROFILE_ALIASES, "Nmap profile")
+
+    def normalize_nuclei_profile(self, value: str | None) -> str:
+        return self._normalize_profile(value or "basic", self.NUCLEI_PROFILE_ALIASES, "Nuclei profile")
+
+    def validate_nmap_target(self, target: str) -> str:
+        clean = self._clean_value(target, "target")
+        if self._is_valid_ip_or_domain(clean):
+            return clean
+        try:
+            network = ipaddress.ip_network(clean, strict=False)
+        except ValueError as exc:
+            raise ValidationError(f"Invalid Nmap target '{target}'.") from exc
+        if not (network.is_private or network.is_loopback or network.is_link_local):
+            raise ValidationError("CIDR ranges must be private, loopback, or link-local.")
+        if network.num_addresses > 4096:
+            raise ValidationError("CIDR range is too large for the safe default policy.")
+        return clean
+
+    def validate_nuclei_target(self, target: str) -> str:
+        clean = self._clean_value(target, "target")
+        parsed = urlparse(clean if "://" in clean else f"//{clean}")
+        host = parsed.hostname
+        if not host:
+            raise ValidationError(f"Invalid Nuclei target '{target}'.")
+        if parsed.scheme and parsed.scheme not in {"http", "https"}:
+            raise ValidationError("Nuclei URLs must use http or https.")
+        if not self._is_valid_ip_or_domain(host):
+            raise ValidationError(f"Invalid Nuclei target '{target}'.")
+        return clean
+
+    def validate_nuclei_targets(self, targets: list[str], max_targets: int | None = None) -> list[str]:
+        limit = max_targets or self.default_limits()["max_targets"]
+        if not targets:
+            raise ValidationError("At least one Nuclei target is required.")
+        if len(targets) > limit:
+            raise ValidationError(f"Target list exceeds configured maximum of {limit}.")
+        return [self.validate_nuclei_target(target) for target in targets]
+
+    def build_nmap_command(
+        self,
+        target: str,
+        output_dir: Path,
+        profile: str = "basic",
+        ports: str | None = None,
+        custom_flags: list[str] | None = None,
+        timeout: int | None = None,
+    ) -> ScannerCommand:
+        selected_profile = self.normalize_nmap_profile(profile)
+        selected_target = self.validate_nmap_target(target)
+        selected_timeout = self._positive_int(timeout, self.default_limits()["timeout"], "timeout")
+        output_paths = self.nmap_output_paths(output_dir)
+        args = ["nmap", "-oX", str(output_paths["xml"]), "-oN", str(output_paths["txt"])]
+        if selected_profile == "quick":
+            args.extend(["-T2", "-F"])
+        elif selected_profile == "basic":
+            args.extend(["-T2"])
+        elif selected_profile == "services":
+            args.extend(["-T2", "-sV", "--version-light"])
+        elif selected_profile == "ports":
+            clean_ports = self.validate_ports(ports)
+            args.extend(["-T2", "-p", clean_ports])
+        elif selected_profile == "custom":
+            args.extend(["-T2", *self.validate_custom_nmap_flags(custom_flags or [])])
+            if ports:
+                args.extend(["-p", self.validate_ports(ports)])
+        args.append(selected_target)
+        return ScannerCommand(
+            "nmap",
+            args,
+            selected_profile,
+            selected_timeout,
+            {key: str(path) for key, path in output_paths.items()},
+        )
+
+    def build_nuclei_command(
+        self,
+        targets: list[str],
+        output_dir: Path,
+        profile: str = "basic",
+        templates: list[str] | None = None,
+        timeout: int | None = None,
+        concurrency: int | None = None,
+        rate_limit: int | None = None,
+        max_targets: int | None = None,
+    ) -> ScannerCommand:
+        limits = self.default_limits()
+        selected_profile = self.normalize_nuclei_profile(profile)
+        selected_timeout = self._positive_int(timeout, limits["timeout"], "timeout")
+        selected_concurrency = self._bounded_int(
+            concurrency, limits["concurrency"], "concurrency", maximum=100
+        )
+        selected_rate = self._bounded_int(rate_limit, limits["rate_limit"], "rate_limit", maximum=500)
+        selected_targets = self.validate_nuclei_targets(targets, max_targets or limits["max_targets"])
+        output_path = self.nuclei_output_path(output_dir)
+        args = [
+            "nuclei",
+            "-jsonl",
+            "-silent",
+            "-timeout",
+            str(selected_timeout),
+            "-c",
+            str(selected_concurrency),
+            "-rate-limit",
+            str(selected_rate),
+            "-o",
+            str(output_path),
+        ]
+        if selected_profile == "technologies":
+            args.extend(["-tags", "tech"])
+        elif selected_profile == "exposure":
+            args.extend(["-tags", "exposure,misconfig"])
+        elif selected_profile == "low-medium":
+            args.extend(["-severity", "low,medium"])
+        elif selected_profile == "high":
+            args.extend(["-severity", "high,critical"])
+        elif selected_profile == "custom":
+            args.extend(self.validate_nuclei_templates(templates or []))
+        if len(selected_targets) == 1:
+            args.extend(["-u", selected_targets[0]])
+        else:
+            target_file = self._write_target_file(output_dir, selected_targets)
+            args.extend(["-list", str(target_file)])
+        return ScannerCommand(
+            "nuclei",
+            args,
+            selected_profile,
+            selected_timeout,
+            {"jsonl": str(output_path)},
+        )
+
+    def run_nmap(self, command: ScannerCommand, output_dir: Path) -> ScannerExecution:
+        if not self.is_installed("nmap"):
+            raise ScannerToolUnavailable("Nmap nao instalado. Instale com sudo apt install -y nmap.")
+        ensure_dir(output_dir)
+        started_at = datetime.now(timezone.utc).isoformat()
+        try:
+            completed = subprocess.run(
+                command.args,
+                capture_output=True,
+                text=True,
+                timeout=command.timeout,
+                shell=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise ScannerTimeoutError("Nmap timed out.") from exc
+        output_paths = {key: Path(value) for key, value in command.output_files.items()}
+        if not output_paths["txt"].exists():
+            output_paths["txt"].write_text(completed.stdout or completed.stderr or "", encoding="utf-8")
+        if not output_paths["xml"].exists() and completed.stdout.strip().startswith("<"):
+            output_paths["xml"].write_text(completed.stdout, encoding="utf-8")
+        if completed.returncode != 0:
+            raise ScannerExecutionError(completed.stderr or "Nmap execution failed.")
+        parsed = self.parse_nmap_xml(output_paths["xml"])
+        return ScannerExecution(
+            tool="nmap",
+            profile=command.profile,
+            command=command.args,
+            return_code=completed.returncode,
+            output_files={key: str(path) for key, path in output_paths.items()},
+            parsed={"hosts": parsed},
+            started_at=started_at,
+            finished_at=datetime.now(timezone.utc).isoformat(),
+        )
+
+    def run_nuclei(self, command: ScannerCommand, output_dir: Path) -> ScannerExecution:
+        if not self.is_installed("nuclei"):
+            raise ScannerToolUnavailable("Nuclei nao instalado. Consulte o README para instalar.")
+        ensure_dir(output_dir)
+        started_at = datetime.now(timezone.utc).isoformat()
+        try:
+            completed = subprocess.run(
+                command.args,
+                capture_output=True,
+                text=True,
+                timeout=command.timeout,
+                shell=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise ScannerTimeoutError("Nuclei timed out.") from exc
+        output_path = Path(command.output_files["jsonl"])
+        if not output_path.exists():
+            output_path.write_text(completed.stdout or "", encoding="utf-8")
+        if completed.returncode != 0:
+            raise ScannerExecutionError(completed.stderr or "Nuclei execution failed.")
+        findings = self.parse_nuclei_jsonl(output_path)
+        return ScannerExecution(
+            tool="nuclei",
+            profile=command.profile,
+            command=command.args,
+            return_code=completed.returncode,
+            output_files={"jsonl": str(output_path)},
+            parsed={"findings": findings},
+            started_at=started_at,
+            finished_at=datetime.now(timezone.utc).isoformat(),
+        )
+
+    def parse_nmap_xml(self, path_or_text: Path | str) -> list[dict[str, Any]]:
+        text = Path(path_or_text).read_text(encoding="utf-8") if isinstance(path_or_text, Path) else path_or_text
+        if not text.strip():
+            raise ScannerParseError("Nmap XML output is empty.")
+        try:
+            root = ElementTree.fromstring(text)
+        except ElementTree.ParseError as exc:
+            raise ScannerParseError("Could not parse Nmap XML output.") from exc
+        hosts: list[dict[str, Any]] = []
+        for host in root.findall("host"):
+            address_node = host.find("address")
+            status_node = host.find("status")
+            host_payload = {
+                "host": address_node.get("addr") if address_node is not None else "",
+                "status": status_node.get("state") if status_node is not None else "unknown",
+                "ports": [],
+            }
+            for port in host.findall("./ports/port"):
+                state_node = port.find("state")
+                service_node = port.find("service")
+                host_payload["ports"].append(
+                    {
+                        "port": port.get("portid"),
+                        "protocol": port.get("protocol"),
+                        "state": state_node.get("state") if state_node is not None else "unknown",
+                        "service": service_node.get("name") if service_node is not None else "",
+                        "version": _service_version(service_node),
+                    }
+                )
+            hosts.append(host_payload)
+        return hosts
+
+    def parse_nuclei_jsonl(self, path_or_text: Path | str) -> list[dict[str, Any]]:
+        text = Path(path_or_text).read_text(encoding="utf-8") if isinstance(path_or_text, Path) else path_or_text
+        if not text.strip():
+            return []
+        findings: list[dict[str, Any]] = []
+        for line in text.splitlines():
+            if not line.strip():
+                continue
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ScannerParseError("Could not parse Nuclei JSONL output.") from exc
+            info = payload.get("info", {}) if isinstance(payload.get("info"), dict) else {}
+            findings.append(
+                {
+                    "target": payload.get("host") or payload.get("matched-at") or payload.get("url", ""),
+                    "template": payload.get("template-id") or payload.get("template", ""),
+                    "name": info.get("name") or payload.get("name", ""),
+                    "severity": info.get("severity") or payload.get("severity", "unknown"),
+                    "description": info.get("description", ""),
+                    "endpoint": payload.get("matched-at") or payload.get("url", ""),
+                    "timestamp": payload.get("timestamp", ""),
+                }
+            )
+        return findings
+
+    def nmap_output_paths(self, output_dir: Path) -> dict[str, Path]:
+        ensure_dir(output_dir)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        return {"txt": output_dir / f"nmap-{stamp}.txt", "xml": output_dir / f"nmap-{stamp}.xml"}
+
+    def nuclei_output_path(self, output_dir: Path) -> Path:
+        ensure_dir(output_dir)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        return output_dir / f"nuclei-{stamp}.jsonl"
+
+    def validate_ports(self, ports: str | None) -> str:
+        clean = self._clean_value(ports or "", "ports")
+        if not PORTS_PATTERN.match(clean):
+            raise ValidationError("Ports must contain only numbers, commas, and ranges.")
+        for chunk in clean.split(","):
+            if "-" in chunk:
+                start, end = chunk.split("-", 1)
+                if int(start) < 1 or int(end) > 65535 or int(start) > int(end):
+                    raise ValidationError("Port range is invalid.")
+            elif int(chunk) < 1 or int(chunk) > 65535:
+                raise ValidationError("Port value is invalid.")
+        return clean
+
+    def validate_custom_nmap_flags(self, flags: list[str]) -> list[str]:
+        for flag in flags:
+            if flag not in self.NMAP_CUSTOM_FLAGS:
+                raise ValidationError(f"Custom Nmap flag '{flag}' is not allowed.")
+        return list(flags)
+
+    def validate_nuclei_templates(self, templates: list[str]) -> list[str]:
+        args: list[str] = []
+        for template in templates:
+            clean = self._clean_value(template, "template")
+            if any(char in clean for char in (";", "&", "|", "`", "$", "\n", "\r")):
+                raise ValidationError("Template value contains unsafe characters.")
+            args.extend(["-t", clean])
+        return args
+
+    def _write_target_file(self, output_dir: Path, targets: list[str]) -> Path:
+        ensure_dir(output_dir)
+        path = output_dir / "nuclei-targets.txt"
+        path.write_text("\n".join(targets) + "\n", encoding="utf-8")
+        return path
+
+    def _is_valid_ip_or_domain(self, value: str) -> bool:
+        if value == "localhost":
+            return True
+        try:
+            ipaddress.ip_address(value)
+            return True
+        except ValueError:
+            return bool(DOMAIN_PATTERN.match(value))
+
+    def _normalize_profile(self, value: str, aliases: dict[str, str], field_name: str) -> str:
+        clean = self._clean_value(value, field_name).lower()
+        if clean not in aliases:
+            raise ValidationError(f"Unsupported {field_name}: {value}.")
+        return aliases[clean]
+
+    def _clean_value(self, value: str | None, field_name: str) -> str:
+        if value is None or not str(value).strip():
+            raise ValidationError(f"{field_name} cannot be empty.")
+        clean = str(value).strip()
+        if any(char in clean for char in (";", "&", "|", "`", "$", "\n", "\r")):
+            raise ValidationError(f"{field_name} contains unsafe characters.")
+        return clean
+
+    def _positive_int(self, value: Any, fallback: int, field_name: str) -> int:
+        if value is None:
+            return fallback
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(f"{field_name} must be a positive integer.") from exc
+        if parsed <= 0:
+            raise ValidationError(f"{field_name} must be a positive integer.")
+        return parsed or fallback
+
+    def _bounded_int(self, value: Any, fallback: int, field_name: str, maximum: int) -> int:
+        parsed = fallback if value is None else self._positive_int(value, fallback, field_name)
+        if parsed > maximum:
+            raise ValidationError(f"{field_name} cannot be greater than {maximum}.")
+        return parsed
+
+
+def _service_version(service_node: ElementTree.Element | None) -> str:
+    if service_node is None:
+        return ""
+    parts = [
+        service_node.get("product", ""),
+        service_node.get("version", ""),
+        service_node.get("extrainfo", ""),
+    ]
+    return " ".join(part for part in parts if part)

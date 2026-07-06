@@ -8,8 +8,9 @@ Esta implementacao segue os documentos oficiais em `docs/MASTER_PROMPT.md` e `do
 
 - Bootstrap com validacao do ambiente, criacao de diretorios e inicializacao controlada.
 - CLI com comandos para status, ajuda, configuracoes, projetos, sessoes, modulos, relatorios, plugins, logs e manutencao segura.
-- Interface de terminal com paineis, tabelas, mensagens coloridas quando suportado, menu organizado, ajuda integrada e barra de progresso.
+- Interface de terminal com estilo cyber/hacker, paineis, tabelas, mensagens coloridas, Rich quando disponivel, menu organizado, ajuda integrada e barra de progresso.
 - Gerenciador de modulos com descoberta automatica, metadados, estados, execucao, eventos e isolamento de falhas.
+- Modulos internos `nmap_scan` e `nuclei_scan` para analises autorizadas com confirmacao obrigatoria.
 - Sistema centralizado de configuracao com valores padrao, validacao e persistencia.
 - Logs rotativos, trilha de auditoria estruturada em JSONL e historico interno de acoes.
 - Gerenciamento de projetos e sessoes com catalogo, historico e integridade de arquivos.
@@ -87,6 +88,9 @@ Executar modulo com relatorio:
 ```bash
 python main.py modules run asset_inventory --param input_file=examples/assets.json --report
 python main.py modules run system_health --report --report-format html
+python main.py modules list
+python main.py scan nmap 127.0.0.1 --authorize
+python main.py scan nuclei http://localhost --authorize
 ```
 
 Gerar relatorio manual:
@@ -110,6 +114,194 @@ python main.py maintenance clean-temp --yes
 ```
 
 O primeiro comando apenas mostra uma simulacao. A limpeza real exige `--yes` e remove somente conteudo descartavel do cache.
+
+## Uso do Nmap no SentinelScan Elite CLI
+
+O modulo `nmap_scan` integra o Nmap ao sistema de modulos do SentinelScan Elite CLI. Ele foi criado para reconhecimento de rede somente em ambientes proprios, redes internas, laboratorios ou ativos com autorizacao explicita.
+
+Aviso obrigatorio: antes de executar qualquer analise, confirme que voce possui autorizacao para analisar o alvo. Sem essa confirmacao, o modulo cancela a operacao e nao executa o Nmap.
+
+Instalar Nmap no Linux:
+
+Debian, Ubuntu e Kali:
+
+```bash
+sudo apt update
+sudo apt install -y nmap
+```
+
+Fedora:
+
+```bash
+sudo dnf install -y nmap
+```
+
+Arch Linux e Manjaro:
+
+```bash
+sudo pacman -S nmap
+```
+
+Verificar instalacao:
+
+```bash
+nmap --version
+```
+
+Acessar pela CLI:
+
+```bash
+python main.py scan nmap 127.0.0.1 --authorize
+```
+
+Perfis disponiveis:
+
+- `quick`: verificacao rapida com opcoes leves.
+- `basic`: perfil padrao seguro.
+- `services`: identifica servicos com `-sV --version-light`.
+- `ports`: permite informar portas com `--ports 80,443`.
+- `custom`: permite apenas flags controladas e exige `--extra-confirm`.
+
+Exemplos:
+
+```bash
+python main.py scan nmap 127.0.0.1 --profile quick --authorize
+python main.py scan nmap 192.168.1.10 --profile ports --ports 22,80,443 --authorize
+python main.py scan nmap localhost --profile custom --custom-flag -sV --authorize --extra-confirm
+```
+
+O modulo salva a saida bruta em TXT e XML, interpreta o XML e extrai host, status, portas, protocolo, estado, servico e versao quando disponivel. Os relatorios profissionais sao gerados em TXT, JSON, CSV e HTML.
+
+Relatorios do Nmap:
+
+```text
+reports/<projeto-ou-global>/<ano>/<mes>/<dia>/<sessao-ou-sessionless>/nmap/
+```
+
+Erros comuns:
+
+- `nmap: command not found`: instale Nmap com o gerenciador de pacotes da sua distribuicao.
+- Alvo invalido: use IP, dominio, `localhost` ou faixa local privada em CIDR.
+- Timeout: aumente `--timeout` com cuidado.
+- Erro ao interpretar XML: verifique se a execucao gerou saida XML valida; detalhes tecnicos ficam em `logs/`.
+
+## Uso do Nuclei no SentinelScan Elite CLI
+
+O modulo `nuclei_scan` integra o Nuclei ao sistema de modulos do SentinelScan Elite CLI. Ele deve ser usado somente para auditoria web autorizada em ativos proprios, laboratorios, redes internas ou ambientes com permissao explicita.
+
+Sem `--authorize`, o modulo cancela a execucao. Perfis de maior impacto, como `high` e `custom`, tambem exigem `--extra-confirm`.
+
+Instalar Nuclei no Linux:
+
+Debian, Ubuntu, Kali, Fedora, Arch e Manjaro podem usar o binario oficial do projeto Nuclei ou o gerenciador de pacotes quando disponivel. Uma forma comum e instalar via Go:
+
+```bash
+go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+```
+
+Verifique se o binario esta no `PATH` e confirme:
+
+```bash
+nuclei -version
+```
+
+Acessar pela CLI:
+
+```bash
+python main.py scan nuclei http://localhost --authorize
+```
+
+Perfis disponiveis:
+
+- `basic`: perfil padrao seguro.
+- `technologies`: usa tags para identificacao de tecnologias.
+- `exposure`: procura exposicoes comuns e configuracoes indevidas.
+- `low-medium`: limita severidade a baixa e media.
+- `high`: usa severidade alta/critica e exige confirmacao extra.
+- `custom`: permite templates controlados com `--template` e exige confirmacao extra.
+
+Exemplos:
+
+```bash
+python main.py scan nuclei http://localhost --profile basic --authorize
+python main.py scan nuclei http://localhost https://127.0.0.1 --profile low-medium --authorize
+python main.py scan nuclei http://localhost --profile custom --template exposures/ --authorize --extra-confirm
+```
+
+Parametros configuraveis:
+
+```bash
+python main.py scan nuclei http://localhost --authorize --timeout 45 --concurrency 3 --rate-limit 10 --max-targets 5
+```
+
+O modulo salva a saida estruturada em JSONL, interpreta os achados e extrai alvo, template, nome, severidade, descricao, endpoint e timestamp. Os resultados sao enviados ao sistema de relatorios em TXT, JSON, CSV e HTML.
+
+Relatorios do Nuclei:
+
+```text
+reports/<projeto-ou-global>/<ano>/<mes>/<dia>/<sessao-ou-sessionless>/nuclei/
+```
+
+Erros comuns:
+
+- `nuclei: command not found`: instale Nuclei e confirme que o binario esta no `PATH`.
+- Templates ausentes: atualize ou informe um caminho/tag valido para templates.
+- Alvo invalido: use URL HTTP/HTTPS, dominio, IP ou lista controlada de alvos.
+- Saida vazia: pode indicar ausencia de achados; verifique o relatorio e logs.
+- Erro ao interpretar saida: confirme se a saida esta em JSONL valido.
+
+## Erros comuns adicionais
+
+`python: command not found`:
+
+```bash
+python3 --version
+sudo apt install -y python3 python3-venv python3-pip
+```
+
+`pip: command not found`:
+
+```bash
+python -m pip --version
+python -m pip install -r requirements.txt
+```
+
+`ModuleNotFoundError`:
+
+```bash
+source .venv/bin/activate
+pip install -r requirements.txt
+python main.py status
+```
+
+Permissao negada:
+
+```bash
+ls -la
+python main.py status
+```
+
+Dependencias ausentes:
+
+```bash
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+Erro ao gerar relatorio:
+
+- Verifique permissao de escrita em `reports/`.
+- Confirme se o formato solicitado e `markdown`, `txt`, `json`, `csv` ou `html`.
+- Consulte `logs/application.log` e `logs/audit.jsonl`.
+
+`Listar modulos` nao aparece nada:
+
+```bash
+python main.py modules list
+python main.py logs audit --limit 20
+```
+
+Se a pasta `modules/` estiver vazia, a CLI mostra uma mensagem amigavel. Se houver modulo invalido ou erro de importacao, o gerenciador isola a falha, registra nos logs e continua listando os demais modulos validos.
 
 ## Como executar no Linux
 
@@ -449,7 +641,7 @@ A licenca do projeto esta em `LICENSE`. Leia esse arquivo antes de redistribuir,
 
 ## Testes
 
-A suite usa `pytest` e cobre nucleo, CLI, configuracao, logs, relatorios, projetos, sessoes, modulos, plugins, utilitarios, erros, integracao, regressao, limpeza segura e smoke tests. A validacao atual consolidou 153 testes automatizados.
+A suite usa `pytest` e cobre nucleo, CLI, configuracao, logs, relatorios, projetos, sessoes, modulos, plugins, utilitarios, erros, integracao, regressao, limpeza segura, Nmap, Nuclei e smoke tests. A validacao atual consolidou 178 testes automatizados.
 
 ```bash
 pytest
@@ -489,6 +681,8 @@ Arquivos principais da suite:
 - `tests/test_integration.py`
 - `tests/test_smoke.py`
 - `tests/test_cleanup.py`
+- `tests/test_scanner_service.py`
+- `tests/test_scanner_modules.py`
 
 Todos os testes usam diretorios temporarios isolados para evitar lixo operacional no repositorio.
 

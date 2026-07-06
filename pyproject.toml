@@ -8,7 +8,7 @@ version = "1.0.0"
 description = "Professional modular CLI for authorized security auditing workflows."
 requires-python = ">=3.10"
 authors = [{ name = "Joao Guilherme" }]
-dependencies = []
+dependencies = ["rich>=13.7"]
 
 [project.scripts]
 sentinelscan = "cli.app:main"
@@ -17,4 +17,3 @@ sentinelscan = "cli.app:main"
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-q"
-

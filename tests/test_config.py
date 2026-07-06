@@ -50,6 +50,30 @@ def test_config_accepts_supported_report_formats(runtime_root, report_format):
     assert settings["reports"]["default_format"] == report_format
 
 
+def test_config_scanner_limits_fall_back_to_safe_defaults(runtime_root):
+    service = ConfigService(runtime_root)
+
+    settings = service.validate(
+        {
+            "scanners": {
+                "defaults": {
+                    "timeout": 0,
+                    "concurrency": -1,
+                    "rate_limit": "bad",
+                    "max_targets": None,
+                }
+            }
+        }
+    )
+
+    assert settings["scanners"]["defaults"] == {
+        "timeout": 60,
+        "concurrency": 5,
+        "rate_limit": 25,
+        "max_targets": 25,
+    }
+
+
 def test_config_rejects_unsafe_paths(runtime_root):
     service = ConfigService(runtime_root)
 

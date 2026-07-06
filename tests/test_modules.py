@@ -170,6 +170,15 @@ def test_module_discovery_handles_missing_module_class(context, tmp_path):
     assert manager.discover(tmp_path / "modules") == []
 
 
+def test_module_discovery_handles_import_error(context, tmp_path):
+    module_dir = tmp_path / "modules" / "broken_import"
+    module_dir.mkdir(parents=True)
+    (module_dir / "module.py").write_text("raise ImportError('boom')\n", encoding="utf-8")
+    manager = ModuleManager(context, EventBus())
+
+    assert manager.discover(tmp_path / "modules") == []
+
+
 def test_module_loader_reports_missing_spec(context, tmp_path, monkeypatch):
     manager = ModuleManager(context, EventBus())
     monkeypatch.setattr("core.module_manager.importlib.util.spec_from_file_location", lambda *args, **kwargs: None)

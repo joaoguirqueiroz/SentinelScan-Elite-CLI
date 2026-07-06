@@ -30,10 +30,22 @@ python main.py sessions start <project_id>
 ## Executar modulo
 
 ```bash
+python main.py modules list
 python main.py modules run system_health --report
 python main.py modules run system_health --report --report-format html
 python main.py modules run asset_inventory --param input_file=examples/assets.json --report --report-format csv
 ```
+
+## Executar analises autorizadas com Nmap e Nuclei
+
+```bash
+python main.py scan nmap 127.0.0.1 --authorize
+python main.py scan nmap 127.0.0.1 --profile ports --ports 80,443 --authorize
+python main.py scan nuclei http://localhost --authorize
+python main.py scan nuclei http://localhost --profile high --authorize --extra-confirm
+```
+
+Sem `--authorize`, a execucao e cancelada. Perfis personalizados e de alto impacto exigem `--extra-confirm`.
 
 ## Gerar relatorio manual
 
@@ -43,6 +55,12 @@ python main.py reports generate --title "Resumo HTML" --format html --data "{\"s
 ```
 
 Formatos suportados: `markdown`, `txt`, `json`, `csv` e `html`.
+
+Relatorios de ferramentas ficam em:
+
+```text
+reports/<projeto-ou-global>/<ano>/<mes>/<dia>/<sessao-ou-sessionless>/<nmap-ou-nuclei>/
+```
 
 ## Consultar auditoria
 

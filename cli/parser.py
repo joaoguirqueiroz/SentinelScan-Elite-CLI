@@ -69,6 +69,55 @@ def build_parser() -> argparse.ArgumentParser:
         help="Report format used with --report.",
     )
 
+    scan = subparsers.add_parser("scan", help="Run authorized scanner integrations.")
+    scan_sub = scan.add_subparsers(dest="scan_command", required=True)
+    scan_nmap = scan_sub.add_parser("nmap", help="Run a controlled Nmap analysis.")
+    scan_nmap.add_argument("target")
+    scan_nmap.add_argument(
+        "--profile",
+        default="basic",
+        choices=["quick", "rapido", "basic", "basico", "services", "servicos", "ports", "portas", "custom", "personalizado"],
+    )
+    scan_nmap.add_argument("--ports")
+    scan_nmap.add_argument("--timeout", type=int)
+    scan_nmap.add_argument("--custom-flag", action="append", default=[])
+    scan_nmap.add_argument("--project")
+    scan_nmap.add_argument("--session")
+    scan_nmap.add_argument("--formats", default="txt,json,csv,html")
+    scan_nmap.add_argument("--authorize", action="store_true")
+    scan_nmap.add_argument("--extra-confirm", action="store_true")
+
+    scan_nuclei = scan_sub.add_parser("nuclei", help="Run a controlled Nuclei audit.")
+    scan_nuclei.add_argument("target", nargs="+")
+    scan_nuclei.add_argument(
+        "--profile",
+        default="basic",
+        choices=[
+            "basic",
+            "basico",
+            "technologies",
+            "tecnologias",
+            "exposure",
+            "exposicao",
+            "low-medium",
+            "baixa-media",
+            "high",
+            "alta",
+            "custom",
+            "personalizado",
+        ],
+    )
+    scan_nuclei.add_argument("--template", action="append", default=[])
+    scan_nuclei.add_argument("--timeout", type=int)
+    scan_nuclei.add_argument("--concurrency", type=int)
+    scan_nuclei.add_argument("--rate-limit", type=int)
+    scan_nuclei.add_argument("--max-targets", type=int)
+    scan_nuclei.add_argument("--project")
+    scan_nuclei.add_argument("--session")
+    scan_nuclei.add_argument("--formats", default="txt,json,csv,html")
+    scan_nuclei.add_argument("--authorize", action="store_true")
+    scan_nuclei.add_argument("--extra-confirm", action="store_true")
+
     reports = subparsers.add_parser("reports", help="Manage generated reports.")
     reports_sub = reports.add_subparsers(dest="reports_command", required=True)
     reports_sub.add_parser("list", help="List generated reports.")

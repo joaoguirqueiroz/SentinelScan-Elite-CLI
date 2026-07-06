@@ -1,2 +1,1 @@
-# Runtime uses Python standard library only.
-
+rich>=13.7

@@ -33,7 +33,20 @@
     "max_tasks": 4,
     "cache_enabled": true
   },
+  "scanners": {
+    "defaults": {
+      "timeout": 60,
+      "concurrency": 5,
+      "rate_limit": 25,
+      "max_targets": 25
+    },
+    "nmap": {
+      "default_profile": "basic"
+    },
+    "nuclei": {
+      "default_profile": "basic"
+    }
+  },
   "modules": {},
   "plugins": {}
 }
-

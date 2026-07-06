@@ -146,7 +146,34 @@ def test_cli_help_command_shows_navigation(runtime_root, capsys):
     assert exit_code == 0
     assert "Ajuda da CLI" in captured.out
     assert "modules list" in captured.out
+    assert "scan nmap" in captured.out
+    assert "scan nuclei" in captured.out
     assert "maintenance clean-temp" in captured.out
+
+
+def test_cli_modules_list_shows_nmap_and_nuclei(runtime_root, capsys):
+    exit_code, captured = run_cli(capsys, runtime_root, "modules", "list")
+
+    assert exit_code == 0
+    assert "nmap_scan" in captured.out
+    assert "nuclei_scan" in captured.out
+    assert "Modulos carregados" in captured.out
+
+
+def test_cli_scan_nmap_requires_authorization(runtime_root, capsys):
+    exit_code, captured = run_cli(capsys, runtime_root, "scan", "nmap", "127.0.0.1")
+
+    assert exit_code == 0
+    assert "Resultado: nmap_scan" in captured.out
+    assert "cancelled" in captured.out
+
+
+def test_cli_scan_nuclei_requires_authorization(runtime_root, capsys):
+    exit_code, captured = run_cli(capsys, runtime_root, "scan", "nuclei", "http://localhost")
+
+    assert exit_code == 0
+    assert "Resultado: nuclei_scan" in captured.out
+    assert "cancelled" in captured.out
 
 
 def test_cli_maintenance_clean_temp_preview_and_confirm(runtime_root, capsys):
@@ -259,7 +286,7 @@ def test_cli_uses_environment_root(runtime_root, capsys, monkeypatch):
 
 
 def test_cli_interactive_smoke_covers_menu_paths(runtime_root, capsys, monkeypatch):
-    choices = iter(["1", "2", "3", "4", "5", "x", "0"])
+    choices = iter(["13", "14", "15", "x", "0"])
     monkeypatch.setattr("builtins.input", lambda _: next(choices))
 
     exit_code = main(["--root", str(runtime_root), "interactive"])
@@ -271,7 +298,9 @@ def test_cli_interactive_smoke_covers_menu_paths(runtime_root, capsys, monkeypat
     assert "Relatorio final da sessao" in captured.out
     assert "Ajuda da CLI" in captured.out
     assert "asset_inventory" in captured.out
-    assert '"root_path"' in captured.out
+    assert "nmap_scan" in captured.out
+    assert "nuclei_scan" in captured.out
+    assert "Status do sistema" in captured.out
 
 
 def test_cli_parse_helpers():

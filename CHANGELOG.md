@@ -7,24 +7,32 @@ Todas as mudancas relevantes do SentinelScan Elite CLI serao registradas neste a
 ### Adicionado
 
 - Interface CLI mais organizada com paineis, ajuda integrada, menu interativo ampliado, barra de progresso e mensagens coloridas quando suportado pelo terminal.
+- Dashboard inicial em estilo cyber/hacker com logo ASCII, slogan, autor, status, usuario, sistema operacional, IP local, CPU, RAM e aviso etico.
+- Integracao do Nmap como modulo interno `nmap_scan`, com perfis `quick`, `basic`, `services`, `ports` e `custom`.
+- Integracao do Nuclei como modulo interno `nuclei_scan`, com perfis `basic`, `technologies`, `exposure`, `low-medium`, `high` e `custom`.
+- Comandos `scan nmap` e `scan nuclei` com confirmacao obrigatoria de autorizacao e confirmacao extra para perfis avancados/personalizados.
 - Exportacao de relatorios nos formatos Markdown, TXT, JSON, CSV e HTML.
-- Organizacao automatica de relatorios por projeto, data e sessao.
+- Organizacao automatica de relatorios por projeto, data, sessao e ferramenta (`nmap`/`nuclei`).
 - Historico interno enriquecido com funcao executada, data/hora, resultado e erro tecnico quando houver.
 - Relatorio final da sessao no encerramento do modo interativo, incluindo tempo total, modulos usados, relatorios criados e erros encontrados.
 - Servico e comando de limpeza segura de temporarios, com simulacao por padrao e confirmacao explicita via `--yes`.
-- Suite ampliada para 153 testes automatizados, cobrindo os novos fluxos de CLI, relatorios, configuracao, historico, limpeza e resumo de sessao.
+- Suite ampliada para 178 testes automatizados, cobrindo os novos fluxos de CLI, relatorios, configuracao, historico, limpeza, Nmap, Nuclei e resumo de sessao.
 - Arquivo `requirements.txt` raiz apontando para as dependencias de execucao.
+- Dependencia `rich` para experiencia visual profissional em terminais compativeis, com fallback ASCII.
 
 ### Melhorado
 
 - Tratamento de erros da CLI com mensagens amigaveis ao usuario e detalhes tecnicos persistidos em logs e historico.
+- Tratamento de erros para Nmap/Nuclei ausentes, alvos invalidos, timeout, saida vazia, parsing XML/JSONL e templates/configuracoes invalidas.
 - README com secao completa "Como executar no Linux", comandos por distribuicao, primeira execucao, atualizacao, solucao de problemas, FAQ, desenvolvimento e licenca.
+- README com secoes dedicadas ao uso de Nmap e Nuclei no SentinelScan Elite CLI.
 - Guia de testes atualizado com a cobertura dos novos componentes.
 
 ### Corrigido
 
 - Saida de status preserva o caminho completo do projeto mesmo quando o painel visual quebra linhas longas.
 - Validacao de configuracao agora aceita todos os formatos de relatorio suportados.
+- Opcao "Listar modulos" agora usa renderizacao dedicada, mostra Nmap/Nuclei, informa estado/categoria/versao e exibe mensagem amigavel quando nao ha modulos carregados.
 
 ## [1.0.0] - 2026-07-06
 
