@@ -48,6 +48,29 @@ def test_full_project_session_module_report_audit_flow(runtime_root):
         application.shutdown()
 
 
+def test_application_session_summary_tracks_modules_reports_and_errors(runtime_root):
+    application = SentinelScanApplication(runtime_root)
+    try:
+        context = application.initialize()
+        context.module_manager.execute(
+            "system_health",
+            ModuleExecutionContext(application=context, parameters={}),
+        )
+        context.module_manager.execute(
+            "asset_inventory",
+            ModuleExecutionContext(application=context, parameters={"assets": {"bad": "shape"}}),
+        )
+        context.report_service.generate_report("Resumo", {"success": True, "data": {}})
+        summary = application.session_summary()
+
+        assert summary["modules_used"] == 2
+        assert set(summary["module_ids"]) == {"asset_inventory", "system_health"}
+        assert summary["reports_created"] == 1
+        assert summary["errors_found"] >= 1
+    finally:
+        application.shutdown()
+
+
 def test_managed_application_initializes_and_shutdowns(runtime_root):
     with managed_application(runtime_root) as context:
         assert context.module_manager.list_modules()
@@ -63,6 +86,14 @@ def test_application_status_reuses_context(app):
 
     assert first_context is second_context
     assert status["modules"] >= 3
+
+
+def test_application_shutdown_without_initialize_is_noop(runtime_root):
+    application = SentinelScanApplication(runtime_root)
+
+    application.shutdown()
+
+    assert application.context is None
 
 
 def test_bootstrap_creates_required_runtime_directories(runtime_root):
@@ -87,4 +118,3 @@ def test_audit_log_contains_structured_json_after_bootstrap(runtime_root):
     lines = (runtime_root / "logs" / "audit.jsonl").read_text(encoding="utf-8").splitlines()
     payload = json.loads(lines[-1])
     assert payload["message"] == "structured"
-

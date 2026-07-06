@@ -19,6 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("status", help="Show application health and loaded components.")
     subparsers.add_parser("interactive", help="Open the guided terminal menu.")
+    subparsers.add_parser("help", help="Show navigation and command guidance.")
 
     config = subparsers.add_parser("config", help="Manage central configuration.")
     config_sub = config.add_subparsers(dest="config_command", required=True)
@@ -62,6 +63,11 @@ def build_parser() -> argparse.ArgumentParser:
     module_run.add_argument("--session")
     module_run.add_argument("--param", action="append", default=[], help="Parameter as key=value.")
     module_run.add_argument("--report", action="store_true", help="Generate a report for the result.")
+    module_run.add_argument(
+        "--report-format",
+        choices=["markdown", "txt", "json", "csv", "html"],
+        help="Report format used with --report.",
+    )
 
     reports = subparsers.add_parser("reports", help="Manage generated reports.")
     reports_sub = reports.add_subparsers(dest="reports_command", required=True)
@@ -70,7 +76,11 @@ def build_parser() -> argparse.ArgumentParser:
     report_generate.add_argument("--title", required=True)
     report_generate.add_argument("--project")
     report_generate.add_argument("--session")
-    report_generate.add_argument("--format", choices=["markdown", "json"], default="markdown")
+    report_generate.add_argument(
+        "--format",
+        choices=["markdown", "txt", "json", "csv", "html"],
+        default="markdown",
+    )
     report_generate.add_argument("--data", default="{}", help="Inline JSON payload.")
 
     plugins = subparsers.add_parser("plugins", help="Manage plugins.")
@@ -82,5 +92,16 @@ def build_parser() -> argparse.ArgumentParser:
     audit = logs_sub.add_parser("audit", help="Show recent audit records.")
     audit.add_argument("--limit", type=int, default=20)
 
-    return parser
+    maintenance = subparsers.add_parser("maintenance", help="Run safe maintenance tasks.")
+    maintenance_sub = maintenance.add_subparsers(dest="maintenance_command", required=True)
+    clean_temp = maintenance_sub.add_parser(
+        "clean-temp",
+        help="Preview or remove disposable cache and temporary files.",
+    )
+    clean_temp.add_argument(
+        "--yes",
+        action="store_true",
+        help="Confirm removal. Without this flag the command only previews the cleanup.",
+    )
 
+    return parser

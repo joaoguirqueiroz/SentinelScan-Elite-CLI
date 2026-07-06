@@ -12,11 +12,19 @@ ou:
 python -m pytest
 ```
 
+Para evitar caches durante revisoes finais:
+
+```bash
+python -B -m pytest -p no:cacheprovider
+```
+
 ## Cobertura
 
 ```bash
 pytest --cov=. --cov-report=term-missing
 ```
+
+Na validacao atual, a suite chegou a 153 testes automatizados cobrindo core, CLI, configuracao, logs, relatorios, projetos, sessoes, modulos, plugins, utilitarios, erros, integracao, regressao, limpeza segura e smoke tests.
 
 ## Estrutura
 
@@ -24,15 +32,16 @@ pytest --cov=. --cov-report=term-missing
 - `tests/test_cli.py`: comandos reais da CLI e parsing de parametros.
 - `tests/test_config.py`: configuracoes validas, invalidas, padrao e corrompidas.
 - `tests/test_logger.py`: logs, auditoria e historico.
-- `tests/test_reports.py`: relatorios Markdown/JSON e erros esperados.
+- `tests/test_reports.py`: relatorios Markdown, TXT, JSON, CSV, HTML, organizacao por projeto/data/sessao e erros esperados.
 - `tests/test_projects.py`: catalogo, arquivamento, historico e estatisticas.
 - `tests/test_sessions.py`: abertura, fechamento, retomada e persistencia.
 - `tests/test_modules.py`: descoberta, registro, execucao, modulos internos e falhas controladas.
 - `tests/test_plugins.py`: plugins validos, invalidos, desativados e incompativeis.
-- `tests/test_utils.py`: persistencia auxiliar, tabelas e mensagens.
+- `tests/test_utils.py`: persistencia auxiliar, historico, tabelas e mensagens.
 - `tests/test_errors.py`: hierarquia de erros e tratamento pela CLI.
 - `tests/test_integration.py`: fluxos completos entre servicos.
 - `tests/test_smoke.py`: inicializacao e comandos basicos.
+- `tests/test_cleanup.py`: limpeza segura de cache e preservacao de dados importantes.
 
 Os testes usam fixtures em `tests/conftest.py` para criar uma copia temporaria do projeto, evitando que logs, relatorios e dados de execucao sujem o repositorio.
 

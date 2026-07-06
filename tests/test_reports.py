@@ -32,6 +32,46 @@ def test_report_service_generates_json(runtime_root, context):
     assert payload["executive_summary"]["items"] == 1
 
 
+@pytest.mark.parametrize(
+    ("report_format", "expected_suffix", "expected_text"),
+    [
+        ("txt", ".txt", "RESUMO EXECUTIVO"),
+        ("csv", ".csv", "executive_summary"),
+        ("html", ".html", "<h1>"),
+    ],
+)
+def test_report_service_generates_export_formats(
+    runtime_root, context, report_format, expected_suffix, expected_text
+):
+    record = context.report_service.generate_report(
+        f"{report_format} Report",
+        {"success": True, "status": "ok", "data": {"items": 2}},
+        report_format=report_format,
+    )
+
+    path = runtime_root / record.path
+    assert path.suffix == expected_suffix
+    assert expected_text in path.read_text(encoding="utf-8")
+
+
+def test_report_service_organizes_reports_by_project_date_and_session(runtime_root, context):
+    project = context.project_service.create_project("Relatorios Organizados")
+    session = context.session_service.start_session(project.id)
+
+    record = context.report_service.generate_report(
+        "Organizado",
+        {"success": True, "status": "ok", "data": {}},
+        project_id=project.id,
+        session_id=session.id,
+        report_format="html",
+    )
+
+    path = runtime_root / record.path
+    assert project.id in record.path
+    assert session.id in record.path
+    assert path.exists()
+
+
 def test_report_service_rejects_unsupported_format(context):
     with pytest.raises(ReportError):
         context.report_service.generate_report("Bad", {}, report_format="pdf")
@@ -59,4 +99,3 @@ def test_report_service_can_be_constructed_directly(runtime_root):
     record = service.generate_report("Direct", {"success": True, "data": {}})
 
     assert (runtime_root / record.path).exists()
-

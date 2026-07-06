@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
+
+import pytest
 
 from cli.messages import error, success, warning
 from cli.tables import format_table
+from services.history_service import HistoryService
 from services.storage import append_jsonl, ensure_dir, read_json, write_json
 
 
@@ -18,6 +22,20 @@ def test_storage_helpers_write_read_and_append(tmp_path):
     assert read_json(json_path) == {"a": 1, "b": 2}
     assert json.loads(jsonl_path.read_text(encoding="utf-8").strip()) == {"event": "ok"}
     assert read_json(directory / "missing.json", default={"fallback": True}) == {"fallback": True}
+
+
+def test_write_json_cleans_temp_file_when_replace_fails(tmp_path, monkeypatch):
+    directory = ensure_dir(tmp_path / "nested")
+
+    def fail_replace(source, destination):
+        raise OSError("replace failed")
+
+    monkeypatch.setattr(os, "replace", fail_replace)
+
+    with pytest.raises(OSError):
+        write_json(directory / "payload.json", {"a": 1})
+
+    assert not list(directory.glob(".payload.json.*.tmp"))
 
 
 def test_format_table_empty_and_populated():
@@ -35,3 +53,19 @@ def test_cli_message_helpers():
     assert warning("check") == "[WARN] check"
     assert error("bad") == "[ERROR] bad"
 
+
+def test_history_service_records_result_error_and_function(tmp_path):
+    service = HistoryService(tmp_path / "history")
+
+    service.record_action(
+        "cli.modules.run",
+        result="error",
+        details={"module_id": "missing"},
+        error="Module missing",
+    )
+
+    record = service.read_recent(1)[0]
+    assert record["function"] == "cli.modules.run"
+    assert record["result"] == "error"
+    assert record["error"] == "Module missing"
+    assert record["details"]["module_id"] == "missing"

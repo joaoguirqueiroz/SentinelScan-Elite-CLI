@@ -161,14 +161,16 @@ class ModuleManager:
 
     def shutdown_all(self) -> None:
         for module_id, entry in self._registry.items():
+            previous_state = entry.state
             try:
                 entry.module.shutdown()
-                entry.state = ModuleState.FINALIZED
-                self.event_bus.publish(
-                    "module.finalized",
-                    "module_manager",
-                    {"module_id": module_id},
-                )
+                if previous_state != ModuleState.ERROR:
+                    entry.state = ModuleState.FINALIZED
+                    self.event_bus.publish(
+                        "module.finalized",
+                        "module_manager",
+                        {"module_id": module_id},
+                    )
             except Exception as exc:  # noqa: BLE001
                 entry.state = ModuleState.ERROR
                 entry.last_error = str(exc)
@@ -209,4 +211,3 @@ class ModuleManager:
             self.context.log_service.record_event(
                 component="module_manager", level="ERROR", message=message
             )
-

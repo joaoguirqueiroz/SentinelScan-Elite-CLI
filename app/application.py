@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -48,9 +49,53 @@ class SentinelScanApplication:
             "health": health,
         }
 
+    def session_summary(self) -> dict[str, Any]:
+        if self.context is None:
+            return {
+                "duration_seconds": 0,
+                "modules_used": 0,
+                "module_ids": [],
+                "reports_created": 0,
+                "report_ids": [],
+                "errors_found": 0,
+            }
+        context = self.context
+        started_at = _parse_datetime(context.started_at)
+        duration_seconds = int((datetime.now(timezone.utc) - started_at).total_seconds())
+        events = context.event_bus.history() if context.event_bus else []
+        module_ids = sorted(
+            {
+                event.payload.get("module_id")
+                for event in events
+                if event.name == "module.execution_started" and event.payload.get("module_id")
+            }
+        )
+        errors_found = len(
+            [
+                event
+                for event in events
+                if event.name.endswith("_failed") or event.name.endswith(".failed")
+            ]
+        )
+        report_ids: list[str] = []
+        if context.report_service:
+            for record in context.report_service.list_reports():
+                generated_at = _parse_datetime(record.generated_at)
+                if generated_at >= started_at:
+                    report_ids.append(record.id)
+        return {
+            "duration_seconds": duration_seconds,
+            "modules_used": len(module_ids),
+            "module_ids": module_ids,
+            "reports_created": len(report_ids),
+            "report_ids": report_ids,
+            "errors_found": errors_found,
+        }
+
     def shutdown(self) -> None:
         if self.context is None:
             return
+        summary = self.session_summary()
         if self.context.module_manager:
             self.context.module_manager.shutdown_all()
         if self.context.plugin_manager:
@@ -60,5 +105,15 @@ class SentinelScanApplication:
                 component="application",
                 level="INFO",
                 message=f"{APP_NAME} shutdown completed.",
+                details=summary,
+            )
+        if self.context.history_service:
+            self.context.history_service.record_action(
+                "application.shutdown",
+                result="success",
+                details=summary,
             )
 
+
+def _parse_datetime(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))

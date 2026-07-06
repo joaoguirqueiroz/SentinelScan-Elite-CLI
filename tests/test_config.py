@@ -41,6 +41,15 @@ def test_config_invalid_values_fall_back_to_safe_defaults(runtime_root):
     assert settings["reports"]["default_format"] == "markdown"
 
 
+@pytest.mark.parametrize("report_format", ["markdown", "txt", "json", "csv", "html"])
+def test_config_accepts_supported_report_formats(runtime_root, report_format):
+    service = ConfigService(runtime_root)
+
+    settings = service.validate({"reports": {"default_format": report_format}})
+
+    assert settings["reports"]["default_format"] == report_format
+
+
 def test_config_rejects_unsafe_paths(runtime_root):
     service = ConfigService(runtime_root)
 
@@ -75,6 +84,11 @@ def test_config_cannot_set_nested_key_below_scalar(runtime_root):
         service.set("custom.child", True)
 
 
+def test_config_empty_key_raises(runtime_root):
+    with pytest.raises(ConfigurationError):
+        ConfigService(runtime_root).set("", "value")
+
+
 def test_config_save_before_load_raises(runtime_root):
     with pytest.raises(ConfigurationError):
         ConfigService(runtime_root).save()
@@ -84,6 +98,15 @@ def test_config_recovers_from_corrupted_runtime_file(runtime_root):
     runtime_file = runtime_root / "data" / "config" / "settings.json"
     runtime_file.parent.mkdir(parents=True, exist_ok=True)
     runtime_file.write_text("{broken json", encoding="utf-8")
+
+    settings = ConfigService(runtime_root).load()
+
+    assert settings["ui"]["theme"] == "dark"
+
+
+def test_config_recovers_from_corrupted_default_file(runtime_root):
+    default_file = runtime_root / "config" / "default_config.json"
+    default_file.write_text("{broken json", encoding="utf-8")
 
     settings = ConfigService(runtime_root).load()
 
@@ -100,3 +123,11 @@ def test_config_merges_runtime_overlay(runtime_root):
     assert settings["ui"]["theme"] == "high-contrast"
     assert settings["app"]["language"] == "pt-BR"
 
+
+def test_config_get_and_set_lazy_load(runtime_root):
+    service = ConfigService(runtime_root)
+
+    assert service.get("ui.theme") == "dark"
+    updated = ConfigService(runtime_root).set("ui.theme", "light")
+
+    assert updated["ui"]["theme"] == "light"

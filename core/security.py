@@ -15,6 +15,7 @@ ADMIN_PERMISSIONS = {
     "plugins:admin",
     "modules:run",
     "logs:read",
+    "maintenance:clean",
 }
 
 PROFILE_PERMISSIONS = {
@@ -26,6 +27,7 @@ PROFILE_PERMISSIONS = {
         "reports:write",
         "modules:run",
         "logs:read",
+        "maintenance:clean",
     },
     "viewer": {"logs:read"},
 }
@@ -57,4 +59,3 @@ class PermissionManager:
             raise PermissionDeniedError(
                 f"Profile '{decision.profile}' cannot perform '{decision.permission}'."
             )
-

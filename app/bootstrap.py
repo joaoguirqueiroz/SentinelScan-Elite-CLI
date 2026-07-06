@@ -14,6 +14,7 @@ from core.plugin_manager import PluginManager
 from core.resources import ResourceMonitor
 from core.security import PermissionManager
 from services.audit_service import AuditService
+from services.cleanup_service import CleanupService
 from services.config_service import ConfigService
 from services.history_service import HistoryService
 from services.log_service import LogService
@@ -66,11 +67,17 @@ class Bootstrapper:
             audit=audit_service,
         )
         history_service = HistoryService(self.root_path / "data" / "history")
+        cleanup_service = CleanupService(
+            root_path=self.root_path,
+            cache_dir=config_service.resolve_path("cache"),
+            audit=audit_service,
+        )
 
         context.project_service = project_service
         context.session_service = session_service
         context.report_service = report_service
         context.history_service = history_service
+        context.cleanup_service = cleanup_service
 
         module_manager = ModuleManager(context, event_bus)
         plugin_manager = PluginManager(context, event_bus)
@@ -125,4 +132,3 @@ class Bootstrapper:
                 )
 
         return handle
-

@@ -42,7 +42,7 @@ class ConfigService:
 
     VALID_THEMES = {"dark", "light", "high-contrast"}
     VALID_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
-    VALID_REPORT_FORMATS = {"markdown", "json"}
+    VALID_REPORT_FORMATS = {"markdown", "txt", "json", "csv", "html"}
 
     def __init__(self, root_path: Path) -> None:
         self.root_path = root_path
@@ -51,7 +51,10 @@ class ConfigService:
         self.settings: dict[str, Any] = {}
 
     def load(self) -> dict[str, Any]:
-        default_config = read_json(self.default_config_path, default=None)
+        try:
+            default_config = read_json(self.default_config_path, default=None)
+        except json.JSONDecodeError:
+            default_config = None
         if default_config is None:
             default_config = deepcopy(FALLBACK_CONFIG)
         try:

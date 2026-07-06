@@ -5,12 +5,13 @@ from __future__ import annotations
 import json
 import os
 import sys
+import traceback
 from pathlib import Path
 from typing import Any
 
 from app.application import SentinelScanApplication
 from cli.interface import TerminalRenderer
-from cli.messages import error, success
+from cli.messages import error, success, warning
 from cli.parser import build_parser
 from core.exceptions import SentinelScanError, ValidationError
 from core.module import ModuleExecutionContext
@@ -22,13 +23,18 @@ def main(argv: list[str] | None = None) -> int:
     root_path = _resolve_root(args.root)
     renderer = TerminalRenderer()
     application = SentinelScanApplication(root_path)
+    context: Any | None = None
+    command_name = _command_name(args)
+
     try:
         context = application.initialize()
         command = args.command or "interactive"
         if command == "interactive":
-            _interactive(context, renderer)
+            _interactive(application, context, renderer)
         elif command == "status":
             renderer.print_status(application.status())
+        elif command == "help":
+            renderer.print_help()
         elif command == "config":
             _handle_config(args, context, renderer)
         elif command == "projects":
@@ -43,12 +49,27 @@ def main(argv: list[str] | None = None) -> int:
             _handle_plugins(args, context, renderer)
         elif command == "logs":
             _handle_logs(args, context)
+        elif command == "maintenance":
+            _handle_maintenance(args, context, renderer)
         else:
             parser.print_help()
             return 2
+        _record_history(context, command_name, result="success")
         return 0
     except SentinelScanError as exc:
-        print(error(str(exc)), file=sys.stderr)
+        _record_cli_error(context, command_name, exc)
+        print(error(f"Nao foi possivel concluir a operacao: {exc}"), file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        _record_cli_error(context, command_name, KeyboardInterrupt("interrupted"))
+        print(error("Operacao cancelada pelo usuario."), file=sys.stderr)
+        return 130
+    except Exception as exc:  # noqa: BLE001 - CLI boundary converts faults into safe output.
+        _record_cli_error(context, command_name, exc, details={"traceback": traceback.format_exc()})
+        print(
+            error("Ocorreu um erro inesperado. Detalhes tecnicos foram salvos nos logs."),
+            file=sys.stderr,
+        )
         return 1
     finally:
         application.shutdown()
@@ -143,7 +164,8 @@ def _handle_modules(args: Any, context: Any, renderer: TerminalRenderer) -> None
                 results=result.to_dict(),
                 project_id=args.project,
                 session_id=args.session,
-                report_format=context.config_service.get("reports.default_format", "markdown"),
+                report_format=args.report_format
+                or context.config_service.get("reports.default_format", "markdown"),
             )
             print(success(f"Report generated: {record.path}"))
 
@@ -180,16 +202,39 @@ def _handle_logs(args: Any, context: Any) -> None:
             print(line)
 
 
-def _interactive(context: Any, renderer: TerminalRenderer) -> None:
+def _handle_maintenance(args: Any, context: Any, renderer: TerminalRenderer) -> None:
+    if args.maintenance_command == "clean-temp":
+        context.permission_manager.require("maintenance:clean")
+        result = context.cleanup_service.clean(dry_run=not args.yes)
+        renderer.print_clean_result(result.to_dict())
+        if args.yes:
+            print(success("Temporary files cleaned safely."))
+        else:
+            print(warning("Preview only. Run again with --yes to confirm cleanup."))
+
+
+def _interactive(
+    application: SentinelScanApplication, context: Any, renderer: TerminalRenderer
+) -> None:
     renderer.print_banner()
     print("Modo interativo")
-    print("1. Status")
-    print("2. Listar módulos")
-    print("3. Listar projetos")
-    print("0. Sair")
     while True:
+        print(
+            renderer.panel(
+                "Menu principal",
+                [
+                    "1. Status",
+                    "2. Listar modulos",
+                    "3. Listar projetos",
+                    "4. Ajuda e navegacao",
+                    "5. Simular limpeza de temporarios",
+                    "0. Sair corretamente",
+                ],
+            )
+        )
         choice = input("> ").strip()
         if choice == "0":
+            renderer.print_final_session_report(application.session_summary())
             print("Encerrando.")
             return
         if choice == "1":
@@ -204,8 +249,75 @@ def _interactive(context: Any, renderer: TerminalRenderer) -> None:
                 [project.to_dict() for project in context.project_service.list_projects()],
                 ["id", "name", "status", "updated_at"],
             )
+        elif choice == "4":
+            renderer.print_help()
+        elif choice == "5":
+            renderer.print_clean_result(context.cleanup_service.preview().to_dict())
         else:
             print("Opcao invalida.")
+
+
+def _command_name(args: Any) -> str:
+    parts = [args.command or "interactive"]
+    for attribute in (
+        "config_command",
+        "projects_command",
+        "sessions_command",
+        "modules_command",
+        "reports_command",
+        "plugins_command",
+        "logs_command",
+        "maintenance_command",
+    ):
+        value = getattr(args, attribute, None)
+        if value:
+            parts.append(value)
+    return "cli." + ".".join(parts)
+
+
+def _record_history(
+    context: Any | None,
+    function_name: str,
+    result: str,
+    details: dict[str, Any] | None = None,
+    error_message: str | None = None,
+) -> None:
+    if context and context.history_service:
+        context.history_service.record_action(
+            function_name=function_name,
+            result=result,
+            details=details,
+            error=error_message,
+        )
+
+
+def _record_cli_error(
+    context: Any | None,
+    command_name: str,
+    exc: BaseException,
+    details: dict[str, Any] | None = None,
+) -> None:
+    payload = {
+        "command": command_name,
+        "error_type": type(exc).__name__,
+        "error": str(exc),
+    }
+    if details:
+        payload.update(details)
+    if context and context.log_service:
+        context.log_service.record_event(
+            component="cli",
+            level="ERROR",
+            message=f"Command failed: {command_name}",
+            details=payload,
+        )
+    _record_history(
+        context,
+        command_name,
+        result="error",
+        details={"command": command_name},
+        error_message=str(exc),
+    )
 
 
 def _parse_params(values: list[str]) -> dict[str, Any]:
@@ -234,4 +346,3 @@ def _parse_json(value: str) -> dict[str, Any]:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

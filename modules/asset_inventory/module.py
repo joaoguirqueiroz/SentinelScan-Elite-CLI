@@ -51,7 +51,9 @@ class AssetInventoryModule(BaseModule):
                 raise ValidationError(f"Input file '{path}' was not found.")
             payload = json.loads(path.read_text(encoding="utf-8"))
             if isinstance(payload, dict):
-                payload = payload.get("assets", [])
+                if "assets" not in payload:
+                    raise ValidationError("Input file object must include an 'assets' list.")
+                payload = payload["assets"]
             if not isinstance(payload, list):
                 raise ValidationError("Input file must contain a list or {'assets': [...]} object.")
             return payload
@@ -79,12 +81,17 @@ class AssetInventoryModule(BaseModule):
         name = str(asset.get("name") or asset.get("host") or asset.get("address") or "").strip()
         if not name:
             raise ValidationError("Asset object must include name, host, or address.")
+        tags = asset.get("tags", [])
+        if isinstance(tags, str):
+            tags = [tags]
+        if not isinstance(tags, list):
+            raise ValidationError("Asset tags must be a list or string.")
         return {
             "id": str(asset.get("id") or f"asset-{index:03d}"),
             "name": name,
             "address": str(asset.get("address") or asset.get("host") or name),
             "type": str(asset.get("type") or "host"),
-            "tags": list(asset.get("tags", [])),
+            "tags": tags,
             "owner": asset.get("owner"),
         }
 

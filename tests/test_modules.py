@@ -74,6 +74,17 @@ class InvalidMetadataModule(BaseModule):
     metadata = "not metadata"
 
 
+class IncompleteMetadataModule(BaseModule):
+    metadata = ModuleMetadata(
+        id="incomplete_module",
+        name="",
+        version="1.0.0",
+        author="Tester",
+        description="Missing name",
+        category="tests",
+    )
+
+
 def test_builtin_modules_are_discovered(context):
     module_ids = {module["id"] for module in context.module_manager.list_modules()}
 
@@ -114,6 +125,13 @@ def test_module_manager_rejects_invalid_metadata(context, tmp_path):
         manager.register(InvalidMetadataModule(), tmp_path / "invalid.py")
 
 
+def test_module_manager_rejects_incomplete_metadata(context, tmp_path):
+    manager = ModuleManager(context, EventBus())
+
+    with pytest.raises(ValidationError):
+        manager.register(IncompleteMetadataModule(), tmp_path / "incomplete.py")
+
+
 def test_module_manager_get_missing_raises(context):
     with pytest.raises(ModuleError):
         context.module_manager.get("missing")
@@ -137,7 +155,8 @@ def test_module_manager_initialization_and_shutdown_failures_are_isolated(contex
     manager.initialize_all()
     manager.shutdown_all()
 
-    assert init_entry.state.value == "finalized"
+    assert init_entry.state.value == "error"
+    assert init_entry.last_error == "init failed"
     assert shutdown_entry.state.value == "error"
     assert shutdown_entry.last_error == "shutdown failed"
 
@@ -149,6 +168,14 @@ def test_module_discovery_handles_missing_module_class(context, tmp_path):
     manager = ModuleManager(context, EventBus())
 
     assert manager.discover(tmp_path / "modules") == []
+
+
+def test_module_loader_reports_missing_spec(context, tmp_path, monkeypatch):
+    manager = ModuleManager(context, EventBus())
+    monkeypatch.setattr("core.module_manager.importlib.util.spec_from_file_location", lambda *args, **kwargs: None)
+
+    with pytest.raises(ModuleError):
+        manager._load_python_module(tmp_path / "missing.py")
 
 
 def test_asset_inventory_accepts_string_and_file_inputs(context, asset_file):
@@ -174,7 +201,9 @@ def test_asset_inventory_accepts_string_and_file_inputs(context, asset_file):
         {"assets": 123},
         {"input_file": "missing.json"},
         {"assets": [{"address": ""}]},
+        {"assets": [" "]},
         {"assets": [42]},
+        {"assets": [{"name": "host", "tags": {"bad": "shape"}}]},
     ],
 )
 def test_asset_inventory_invalid_inputs_fail_safely(context, parameters):
@@ -201,6 +230,37 @@ def test_asset_inventory_invalid_json_is_returned_as_module_error(context, tmp_p
     assert result.status == "error"
 
 
+def test_asset_inventory_file_object_must_contain_assets_list(context, tmp_path):
+    bad_file = tmp_path / "bad_assets.json"
+    bad_file.write_text('{"items": []}', encoding="utf-8")
+
+    with pytest.raises(ValidationError, match="assets"):
+        AssetInventoryModule().execute(
+            ModuleExecutionContext(application=context, parameters={"input_file": str(bad_file)})
+        )
+
+
+def test_asset_inventory_file_payload_must_be_list(context, tmp_path):
+    bad_file = tmp_path / "bad_assets.json"
+    bad_file.write_text('{"assets": {"host": "x"}}', encoding="utf-8")
+
+    with pytest.raises(ValidationError, match="list"):
+        AssetInventoryModule().execute(
+            ModuleExecutionContext(application=context, parameters={"input_file": str(bad_file)})
+        )
+
+
+def test_asset_inventory_converts_string_tag_to_list(context):
+    result = AssetInventoryModule().execute(
+        ModuleExecutionContext(
+            application=context,
+            parameters={"assets": [{"name": "host", "tags": "critical"}]},
+        )
+    )
+
+    assert result.data["assets"][0]["tags"] == ["critical"]
+
+
 def test_system_health_module_reports_runtime(context):
     result = SystemHealthModule().execute(ModuleExecutionContext(application=context))
 
@@ -224,4 +284,3 @@ def test_project_summary_module_reports_global_and_project_stats(context):
 def test_project_summary_rejects_empty_project_id():
     with pytest.raises(ValidationError):
         ProjectSummaryModule().validate({"project_id": " "})
-

@@ -73,23 +73,3 @@ def asset_file(runtime_root: Path) -> Path:
         encoding="utf-8",
     )
     return path
-
-
-def write_plugin(
-    root: Path,
-    plugin_id: str,
-    manifest: dict,
-    code: str | None = None,
-) -> Path:
-    plugin_dir = root / "plugins" / plugin_id
-    plugin_dir.mkdir(parents=True, exist_ok=True)
-    (plugin_dir / "plugin.json").write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-    if code is not None:
-        (plugin_dir / manifest.get("entrypoint", "plugin.py")).write_text(
-            code,
-            encoding="utf-8",
-        )
-    return plugin_dir

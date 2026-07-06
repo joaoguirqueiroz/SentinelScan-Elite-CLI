@@ -7,6 +7,7 @@ import pytest
 from core.events import EventBus
 from core.exceptions import PermissionDeniedError, ValidationError
 from core.module import BaseModule, ModuleExecutionContext, ModuleMetadata, ModuleResult
+from core.plugin import BasePlugin, PluginContext, PluginMetadata
 from core.resources import ResourceMonitor
 from core.security import PermissionManager
 from core.validators import (
@@ -41,6 +42,7 @@ def test_event_bus_dispatches_specific_and_wildcard_handlers():
     assert event.payload == {"ok": True}
     assert received == [event]
     assert wildcard == [event]
+    assert bus.history() == [event]
     assert bus.history(limit=1) == [event]
 
 
@@ -64,6 +66,21 @@ def test_base_module_result_uses_metadata():
 def test_base_module_execute_must_be_implemented(context):
     with pytest.raises(NotImplementedError):
         DemoModule().execute(ModuleExecutionContext(application=context))
+
+
+def test_base_plugin_default_lifecycle_methods(context):
+    plugin = BasePlugin()
+    metadata = PluginMetadata(
+        id="base_plugin",
+        name="Base",
+        version="1.0.0",
+        author="Tester",
+        description="Base plugin",
+        category="tests",
+    )
+
+    assert plugin.initialize(PluginContext(application=context, metadata=metadata)) is None
+    assert plugin.shutdown() is None
 
 
 def test_permission_manager_allows_and_denies_profiles():
@@ -114,4 +131,3 @@ def test_validators_accept_and_reject_expected_values(tmp_path):
         ensure_relative_path("../outside", "path")
     with pytest.raises(ValidationError):
         ensure_within_root(root, tmp_path / "outside")
-

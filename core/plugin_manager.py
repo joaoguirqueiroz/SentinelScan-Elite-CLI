@@ -107,7 +107,7 @@ class PluginManager:
 
     def shutdown_all(self) -> None:
         for plugin_id, entry in self._registry.items():
-            if entry.plugin is None:
+            if entry.plugin is None or entry.state != PluginState.INITIALIZED:
                 continue
             try:
                 entry.plugin.shutdown()
@@ -145,7 +145,15 @@ class PluginManager:
         if metadata.id in self._registry:
             raise PluginError(f"Plugin '{metadata.id}' is already registered.")
         enabled = bool(payload.get("enabled", True))
-        plugin_instance = self._instantiate_plugin(plugin_dir, payload, metadata)
+        missing_dependencies = [
+            dependency for dependency in metadata.dependencies if dependency not in self._registry
+        ]
+        if missing_dependencies:
+            raise PluginError(
+                f"Plugin '{metadata.id}' has missing dependencies: "
+                f"{', '.join(missing_dependencies)}."
+            )
+        plugin_instance = None if not enabled else self._instantiate_plugin(plugin_dir, payload, metadata)
         entry = PluginRegistryEntry(
             metadata=metadata,
             state=PluginState.DISCOVERED,
@@ -181,6 +189,13 @@ class PluginManager:
         plugin = plugin_class()
         if not isinstance(plugin, BasePlugin):
             raise PluginError("Plugin class must inherit from BasePlugin.")
+        if not isinstance(getattr(plugin, "metadata", None), PluginMetadata):
+            raise PluginError("Plugin metadata must be a PluginMetadata instance.")
+        if plugin.metadata.id != metadata.id:
+            raise PluginError(
+                f"Plugin metadata id '{plugin.metadata.id}' does not match "
+                f"manifest id '{metadata.id}'."
+            )
         return plugin
 
     def _load_python_module(self, module_file: Path, plugin_id: str) -> ModuleType:
