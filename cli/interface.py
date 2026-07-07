@@ -37,8 +37,7 @@ class TerminalRenderer:
                 "SentinelScan Elite CLI",
                 f"Versao: {APP_VERSION}",
                 "Cyber Defense & Vulnerability Intelligence",
-                "Feito por Joao Guilherme",
-                "Author hex: 4a 6f 61 6f 20 47 75 69 6c 68 65 72 6d 65",
+                "Desenvolvido por Joao Guilherme",
                 "Use 'sentinelscan help' para ver navegacao, atalhos e comandos.",
             ],
         )

@@ -48,6 +48,7 @@ Todas as mudancas relevantes do SentinelScan Elite CLI serao registradas neste a
 
 ### Corrigido
 
+- Banner inicial removeu a linha hexadecimal de autor, mantendo a apresentacao profissional da CLI.
 - Saida de status preserva o caminho completo do projeto mesmo quando o painel visual quebra linhas longas.
 - Validacao de configuracao agora aceita todos os formatos de relatorio suportados.
 - Opcao "Listar modulos" agora usa renderizacao dedicada, mostra Nmap/Nuclei, informa estado/categoria/versao e exibe mensagem amigavel quando nao ha modulos carregados.
