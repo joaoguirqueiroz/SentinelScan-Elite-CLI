@@ -23,6 +23,8 @@ class ApplicationContext:
     history_service: Any | None = None
     cleanup_service: Any | None = None
     scanner_service: Any | None = None
+    smart_scan_service: Any | None = None
+    baseline_service: Any | None = None
     setup_service: Any | None = None
     module_manager: Any | None = None
     plugin_manager: Any | None = None

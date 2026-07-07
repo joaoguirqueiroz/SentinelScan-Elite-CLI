@@ -66,9 +66,49 @@ python main.py scan nmap 127.0.0.1 --authorize
 python main.py scan nmap 127.0.0.1 --profile ports --ports 80,443 --authorize
 python main.py scan nuclei http://localhost --authorize
 python main.py scan nuclei http://localhost --profile high --authorize --extra-confirm
+python main.py scan smart 127.0.0.1 --authorize
+python main.py scan smart 127.0.0.1 --profile advanced --authorize --extra-confirm
 ```
 
 Sem `--authorize`, a execucao e cancelada. Perfis personalizados e de alto impacto exigem `--extra-confirm`.
+
+## Smart scan
+
+O smart scan usa Nmap para identificar portas/servicos, seleciona endpoints web relevantes e roda Nuclei apenas nesses endpoints, quando a ferramenta estiver instalada.
+
+```bash
+python main.py scan smart 127.0.0.1 --authorize
+python main.py scan smart 192.168.1.10 --profile intermediate --authorize
+python main.py scan smart 192.168.1.10 --profile custom --ports 80,443 --tag tech --severity high --authorize --extra-confirm
+```
+
+Os resultados ficam em:
+
+```text
+reports/<projeto-ou-global>/<ano>/<mes>/<dia>/<sessao-ou-sessionless>/smart-scan/
+```
+
+## Baseline defensivo
+
+Crie um baseline a partir de um JSON de scan ou de relatorio:
+
+```bash
+python main.py baseline create lab-interno --data resultado-smart.json
+```
+
+Compare uma nova execucao:
+
+```bash
+python main.py baseline compare lab-interno --data resultado-smart-novo.json
+```
+
+O comparativo mostra novos servicos, servicos removidos, mudancas de versao, novos achados, achados resolvidos e achados persistentes.
+
+## Configuracao YAML
+
+Edite `config/sentinelscan.yaml` para ajustar timeout, concorrencia, rate limit, maximo de alvos, portas web, tags/severidades/templates do Nuclei, scripts NSE permitidos, baseline e alertas.
+
+Use `config/sentinelscan.example.yaml` como referencia.
 
 ## Gerar relatorio manual
 

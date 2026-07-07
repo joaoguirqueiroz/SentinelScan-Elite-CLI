@@ -48,6 +48,8 @@ def main(argv: list[str] | None = None) -> int:
             _handle_modules(args, context, renderer)
         elif command == "scan":
             _handle_scan(args, context, renderer)
+        elif command == "baseline":
+            _handle_baseline(args, context, renderer)
         elif command == "reports":
             _handle_reports(args, context, renderer)
         elif command == "plugins":
@@ -250,6 +252,58 @@ def _handle_scan(args: Any, context: Any, renderer: TerminalRenderer) -> None:
             ),
         )
         renderer.print_scan_result(result.to_dict())
+    elif args.scan_command == "smart":
+        parameters = {
+            "targets": args.target,
+            "profile": args.profile,
+            "ports": args.ports,
+            "timeout": args.timeout,
+            "concurrency": args.concurrency,
+            "rate_limit": args.rate_limit,
+            "max_targets": args.max_targets,
+            "custom_flags": args.custom_flag,
+            "templates": args.template,
+            "template_dirs": args.template_dir,
+            "tags": args.tag,
+            "severities": args.severity,
+            "nse_profile": args.nse_profile,
+            "nse_scripts": args.nse_script,
+            "baseline": args.baseline,
+            "authorized": args.authorize,
+            "extra_confirmed": args.extra_confirm,
+            "report_formats": args.formats,
+        }
+        result = context.module_manager.execute(
+            "smart_scan",
+            ModuleExecutionContext(
+                application=context,
+                parameters=parameters,
+                project_id=args.project,
+                session_id=args.session,
+            ),
+        )
+        renderer.print_smart_scan_result(result.to_dict())
+
+
+def _handle_baseline(args: Any, context: Any, renderer: TerminalRenderer) -> None:
+    context.permission_manager.require("reports:write")
+    payload = _read_json_file(args.data)
+    if args.baseline_command == "create":
+        record = context.baseline_service.create_baseline(args.name, payload, source=args.data)
+        context.history_service.record_action(
+            "baseline.create",
+            result="success",
+            details={"name": record.name, "path": record.path},
+        )
+        renderer.print_json(record.to_dict())
+    elif args.baseline_command == "compare":
+        result = context.baseline_service.compare(args.name, payload)
+        context.history_service.record_action(
+            "baseline.compare",
+            result=result["summary"]["status"],
+            details=result["summary"],
+        )
+        renderer.print_baseline_compare(result)
 
 
 def _handle_reports(args: Any, context: Any, renderer: TerminalRenderer) -> None:
@@ -307,14 +361,14 @@ def _interactive(
                 [
                     "1. Network Recon Autorizado (Nmap)",
                     "2. Web Vulnerability Audit (Nuclei)",
-                    "3. API Security Audit (em desenvolvimento)",
-                    "4. SSL/TLS Inspector (em desenvolvimento)",
-                    "5. CVE Intelligence (em desenvolvimento)",
-                    "6. Linux Hardening Audit (em desenvolvimento)",
-                    "7. Log Threat Analyzer (em desenvolvimento)",
-                    "8. OSINT Tecnico (em desenvolvimento)",
+                    "3. API Security Audit",
+                    "4. SSL/TLS Inspector",
+                    "5. CVE Intelligence",
+                    "6. Linux Hardening Audit",
+                    "7. Log Threat Analyzer",
+                    "8. OSINT Tecnico",
                     "9. Report Center",
-                    "10. Scan Profile Manager (em desenvolvimento)",
+                    "10. Scan Profile Manager",
                     "11. Historico",
                     "12. Configuracoes",
                     "13. Listar modulos",
@@ -343,7 +397,7 @@ def _interactive(
                 "8": "OSINT Tecnico",
                 "10": "Scan Profile Manager",
             }
-            _feature_in_development(context, renderer, feature_names[choice])
+            _guided_security_workflow(context, renderer, feature_names[choice])
         elif choice == "9":
             _interactive_reports(context, renderer)
         elif choice == "11":
@@ -367,20 +421,53 @@ def _interactive(
             print("Opcao invalida.")
 
 
-def _feature_in_development(context: Any, renderer: TerminalRenderer, name: str) -> None:
+def _guided_security_workflow(context: Any, renderer: TerminalRenderer, name: str) -> None:
+    guidance = {
+        "API Security Audit": [
+            "Fluxo seguro para planejar auditoria de APIs autorizadas.",
+            "Valide escopo, ambiente, autenticacao permitida, rate limit e janela autorizada.",
+            "Use Nuclei apenas com autorizacao e templates/tags controlados.",
+        ],
+        "SSL/TLS Inspector": [
+            "Fluxo seguro para revisar postura TLS sem scripts intrusivos.",
+            "Registre hostname, portas esperadas, validade de certificados e protocolos permitidos.",
+            "Use ferramentas externas apenas contra ativos autorizados.",
+        ],
+        "CVE Intelligence": [
+            "Fluxo defensivo para correlacionar servico, produto e versao com risco conhecido.",
+            "Use os dados de Nmap/smart scan como inventario e confirme manualmente CVEs relevantes.",
+            "Priorize sistemas expostos, versoes antigas e achados com evidencia.",
+        ],
+        "Linux Hardening Audit": [
+            "Fluxo local e defensivo para revisar configuracoes do host autorizado.",
+            "Verifique atualizacoes, usuarios, servicos habilitados, logs, firewall e permissoes.",
+            "Nenhuma acao destrutiva e executada automaticamente.",
+        ],
+        "Log Threat Analyzer": [
+            "Fluxo defensivo para revisar logs da propria aplicacao SentinelScan.",
+            "Use logs/audit para rastreabilidade de execucoes, erros e cancelamentos.",
+            "Dados sensiveis nao devem ser registrados.",
+        ],
+        "OSINT Tecnico": [
+            "Fluxo passivo para organizar evidencias tecnicas fornecidas pelo usuario.",
+            "Nao executa coleta externa automatica nem acessa terceiros.",
+            "Registre dominios autorizados, proprietario, fonte e objetivo da analise.",
+        ],
+        "Scan Profile Manager": [
+            "Perfis ativos: basic, intermediate, advanced e custom.",
+            "Advanced/custom exigem confirmacao extra e continuam sem evasao ou exploracao.",
+            "A configuracao pode ser ajustada em config/sentinelscan.yaml.",
+        ],
+    }
     renderer.print_panel(
         name,
-        [
-            "Funcao em desenvolvimento.",
-            "A opcao abre corretamente, nao executa acoes incompletas e retorna ao menu principal.",
-            "Use os comandos ja implementados para Nmap, Nuclei, relatorios, modulos, historico e configuracoes.",
-        ],
+        guidance.get(name, ["Fluxo guiado seguro disponivel."]),
         style="yellow",
     )
     context.history_service.record_action(
         f"interactive.{name.lower().replace(' ', '_')}",
-        result="development",
-        details={"status": "function_in_development"},
+        result="guided",
+        details={"status": "guided_security_workflow"},
     )
 
 
@@ -607,6 +694,7 @@ def _command_name(args: Any) -> str:
         "logs_command",
         "maintenance_command",
         "setup_command",
+        "baseline_command",
     ):
         value = getattr(args, attribute, None)
         if value:
@@ -698,6 +786,19 @@ def _parse_json(value: str) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         raise ValidationError("Report data must be a JSON object.")
     return parsed
+
+
+def _read_json_file(path_value: str) -> dict[str, Any]:
+    path = Path(path_value)
+    if not path.exists():
+        raise ValidationError(f"JSON file not found: {path_value}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except json.JSONDecodeError as exc:
+        raise ValidationError(f"Invalid JSON file: {path_value}") from exc
+    if not isinstance(payload, dict):
+        raise ValidationError("Baseline data file must contain a JSON object.")
+    return payload
 
 
 if __name__ == "__main__":

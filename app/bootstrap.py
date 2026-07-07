@@ -14,6 +14,7 @@ from core.plugin_manager import PluginManager
 from core.resources import ResourceMonitor
 from core.security import PermissionManager
 from services.audit_service import AuditService
+from services.baseline_service import BaselineService
 from services.cleanup_service import CleanupService
 from services.config_service import ConfigService
 from services.history_service import HistoryService
@@ -23,6 +24,7 @@ from services.report_service import ReportService
 from services.scanner_service import ScannerService
 from services.session_service import SessionService
 from services.setup_service import SetupService
+from services.smart_scan_service import SmartScanService
 from services.storage import ensure_dir
 
 
@@ -75,6 +77,8 @@ class Bootstrapper:
             audit=audit_service,
         )
         scanner_service = ScannerService(root_path=self.root_path, settings=settings)
+        smart_scan_service = SmartScanService(settings=settings)
+        baseline_service = BaselineService(self.root_path)
         setup_service = SetupService(root_path=self.root_path)
 
         context.project_service = project_service
@@ -83,6 +87,8 @@ class Bootstrapper:
         context.history_service = history_service
         context.cleanup_service = cleanup_service
         context.scanner_service = scanner_service
+        context.smart_scan_service = smart_scan_service
+        context.baseline_service = baseline_service
         context.setup_service = setup_service
 
         module_manager = ModuleManager(context, event_bus)

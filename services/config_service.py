@@ -7,6 +7,8 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from core.constants import DEFAULT_CONFIG_FILE, RUNTIME_CONFIG_FILE
 from core.exceptions import ConfigurationError
 from core.validators import ensure_relative_path
@@ -34,14 +36,36 @@ FALLBACK_CONFIG: dict[str, Any] = {
     "performance": {"max_tasks": 4, "cache_enabled": True},
     "scanners": {
         "defaults": {
+            "profile": "basic",
             "timeout": 60,
             "concurrency": 5,
             "rate_limit": 25,
             "max_targets": 25,
         },
-        "nmap": {"default_profile": "basic"},
-        "nuclei": {"default_profile": "basic"},
+        "smart": {
+            "default_profile": "basic",
+            "large_target_threshold": 10,
+            "web_ports": [80, 443, 8080, 8443],
+        },
+        "nmap": {
+            "default_profile": "basic",
+            "allowed_nse_profiles": ["default-safe", "discovery", "version", "safe", "custom-authorized"],
+            "allowed_nse_scripts": ["default", "discovery", "version", "safe", "http-title", "http-headers"],
+        },
+        "nuclei": {
+            "default_profile": "basic",
+            "severities": ["info", "low", "medium", "high", "critical"],
+            "tags": ["tech", "exposure", "misconfig"],
+            "templates": [],
+            "template_dirs": [],
+        },
     },
+    "baseline": {
+        "enabled": True,
+        "alert_new_open_ports": True,
+        "alert_new_high_findings": True,
+    },
+    "alerts": {"terminal": True, "report": True, "history": True},
     "modules": {},
     "plugins": {},
 }
@@ -57,22 +81,30 @@ class ConfigService:
     def __init__(self, root_path: Path) -> None:
         self.root_path = root_path
         self.default_config_path = root_path / DEFAULT_CONFIG_FILE
+        self.yaml_config_path = root_path / "config" / "sentinelscan.yaml"
         self.runtime_config_path = root_path / RUNTIME_CONFIG_FILE
         self.settings: dict[str, Any] = {}
+        self.last_warning: str | None = None
 
     def load(self) -> dict[str, Any]:
+        self.last_warning = None
         try:
             default_config = read_json(self.default_config_path, default=None)
         except json.JSONDecodeError:
             default_config = None
         if default_config is None:
             default_config = deepcopy(FALLBACK_CONFIG)
+        yaml_config = self._read_yaml_config()
+        if yaml_config:
+            default_config = self._deep_merge(deepcopy(default_config), yaml_config)
         try:
             runtime_config = read_json(self.runtime_config_path, default={})
         except json.JSONDecodeError:
             runtime_config = {}
         merged = self._deep_merge(deepcopy(default_config), runtime_config)
         self.settings = self.validate(merged)
+        if self.last_warning:
+            self.settings.setdefault("runtime", {})["yaml_warning"] = self.last_warning
         return deepcopy(self.settings)
 
     def validate(self, settings: dict[str, Any]) -> dict[str, Any]:
@@ -88,6 +120,7 @@ class ConfigService:
         if report_format not in self.VALID_REPORT_FORMATS:
             config["reports"]["default_format"] = "markdown"
         scanner_defaults = config.setdefault("scanners", {}).setdefault("defaults", {})
+        scanner_defaults["profile"] = str(scanner_defaults.get("profile") or "basic")
         scanner_defaults["timeout"] = self._positive_int(
             scanner_defaults.get("timeout"), FALLBACK_CONFIG["scanners"]["defaults"]["timeout"]
         )
@@ -102,6 +135,34 @@ class ConfigService:
         scanner_defaults["max_targets"] = self._positive_int(
             scanner_defaults.get("max_targets"),
             FALLBACK_CONFIG["scanners"]["defaults"]["max_targets"],
+        )
+        smart = config.setdefault("scanners", {}).setdefault("smart", {})
+        smart["default_profile"] = str(smart.get("default_profile") or "basic")
+        smart["large_target_threshold"] = self._positive_int(
+            smart.get("large_target_threshold"),
+            FALLBACK_CONFIG["scanners"]["smart"]["large_target_threshold"],
+        )
+        smart["web_ports"] = self._int_list(
+            smart.get("web_ports"),
+            FALLBACK_CONFIG["scanners"]["smart"]["web_ports"],
+        )
+        nuclei = config.setdefault("scanners", {}).setdefault("nuclei", {})
+        nuclei["severities"] = self._str_list(
+            nuclei.get("severities"), FALLBACK_CONFIG["scanners"]["nuclei"]["severities"]
+        )
+        nuclei["tags"] = self._str_list(
+            nuclei.get("tags"), FALLBACK_CONFIG["scanners"]["nuclei"]["tags"]
+        )
+        nuclei["templates"] = self._str_list(nuclei.get("templates"), [])
+        nuclei["template_dirs"] = self._str_list(nuclei.get("template_dirs"), [])
+        nmap = config.setdefault("scanners", {}).setdefault("nmap", {})
+        nmap["allowed_nse_profiles"] = self._str_list(
+            nmap.get("allowed_nse_profiles"),
+            FALLBACK_CONFIG["scanners"]["nmap"]["allowed_nse_profiles"],
+        )
+        nmap["allowed_nse_scripts"] = self._str_list(
+            nmap.get("allowed_nse_scripts"),
+            FALLBACK_CONFIG["scanners"]["nmap"]["allowed_nse_scripts"],
         )
         for key, value in config.get("paths", {}).items():
             ensure_relative_path(str(value), f"paths.{key}")
@@ -165,9 +226,43 @@ class ConfigService:
                 base[key] = value
         return base
 
+    def _read_yaml_config(self) -> dict[str, Any]:
+        if not self.yaml_config_path.exists():
+            return {}
+        try:
+            payload = yaml.safe_load(self.yaml_config_path.read_text(encoding="utf-8")) or {}
+        except yaml.YAMLError as exc:
+            self.last_warning = f"YAML configuration ignored: {exc}"
+            return {}
+        if not isinstance(payload, dict):
+            self.last_warning = "YAML configuration ignored: root must be a mapping."
+            return {}
+        return payload
+
     def _positive_int(self, value: Any, fallback: int) -> int:
         try:
             parsed = int(value)
         except (TypeError, ValueError):
             return fallback
         return parsed if parsed > 0 else fallback
+
+    def _str_list(self, value: Any, fallback: list[str]) -> list[str]:
+        if value is None:
+            return list(fallback)
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        return list(fallback)
+
+    def _int_list(self, value: Any, fallback: list[int]) -> list[int]:
+        values = value if isinstance(value, list) else fallback
+        parsed: list[int] = []
+        for item in values:
+            try:
+                number = int(item)
+            except (TypeError, ValueError):
+                continue
+            if 1 <= number <= 65535:
+                parsed.append(number)
+        return parsed or list(fallback)

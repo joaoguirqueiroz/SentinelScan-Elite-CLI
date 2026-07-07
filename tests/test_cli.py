@@ -148,6 +148,8 @@ def test_cli_help_command_shows_navigation(runtime_root, capsys):
     assert "modules list" in captured.out
     assert "scan nmap" in captured.out
     assert "scan nuclei" in captured.out
+    assert "scan smart" in captured.out
+    assert "baseline compare" in captured.out
     assert "setup check" in captured.out
     assert "setup_wizard.py" in captured.out
     assert "maintenance clean-temp" in captured.out
@@ -201,6 +203,65 @@ def test_cli_scan_nuclei_requires_authorization(runtime_root, capsys):
     assert exit_code == 0
     assert "Resultado: nuclei_scan" in captured.out
     assert "cancelled" in captured.out
+
+
+def test_cli_scan_smart_requires_authorization(runtime_root, capsys):
+    exit_code, captured = run_cli(capsys, runtime_root, "scan", "smart", "127.0.0.1")
+
+    assert exit_code == 0
+    assert "Smart Scan" in captured.out
+    assert "cancelled" in captured.out
+
+
+def test_cli_baseline_create_and_compare(runtime_root, capsys):
+    payload = {
+        "correlation": {
+            "hosts": [
+                {
+                    "host": "127.0.0.1",
+                    "ports": [
+                        {
+                            "port": "80",
+                            "protocol": "tcp",
+                            "state": "open",
+                            "service": "http",
+                            "version": "nginx 1.25",
+                        }
+                    ],
+                }
+            ],
+            "findings": [],
+        }
+    }
+    data_file = runtime_root / "examples" / "baseline_payload.json"
+    data_file.write_text(json.dumps(payload), encoding="utf-8")
+
+    exit_code, captured = run_cli(capsys, runtime_root, "baseline", "create", "lab", "--data", str(data_file))
+    assert exit_code == 0
+    assert '"name": "lab"' in captured.out
+
+    payload["correlation"]["hosts"][0]["ports"].append(
+        {"port": "443", "protocol": "tcp", "state": "open", "service": "https", "version": "nginx 1.25"}
+    )
+    data_file.write_text(json.dumps(payload), encoding="utf-8")
+    exit_code, captured = run_cli(capsys, runtime_root, "baseline", "compare", "lab", "--data", str(data_file))
+
+    assert exit_code == 0
+    assert "Baseline Compare" in captured.out
+    assert "changed" in captured.out
+
+
+def test_cli_baseline_accepts_utf8_bom_json(runtime_root, capsys):
+    data_file = runtime_root / "examples" / "baseline_bom.json"
+    data_file.write_text(
+        '\ufeff{"correlation":{"hosts":[],"findings":[]}}',
+        encoding="utf-8",
+    )
+
+    exit_code, captured = run_cli(capsys, runtime_root, "baseline", "create", "bom", "--data", str(data_file))
+
+    assert exit_code == 0
+    assert '"name": "bom"' in captured.out
 
 
 def test_cli_maintenance_clean_temp_preview_and_confirm(runtime_root, capsys):
@@ -330,7 +391,7 @@ def test_cli_interactive_smoke_covers_menu_paths(runtime_root, capsys, monkeypat
     assert "Status do sistema" in captured.out
 
 
-def test_cli_interactive_development_options_open_cleanly(runtime_root, capsys, monkeypatch):
+def test_cli_interactive_guided_options_open_cleanly(runtime_root, capsys, monkeypatch):
     choices = iter(["3", "4", "5", "6", "7", "8", "10", "0"])
     monkeypatch.setattr("builtins.input", lambda _: next(choices))
 
@@ -338,7 +399,8 @@ def test_cli_interactive_development_options_open_cleanly(runtime_root, capsys, 
     captured = capsys.readouterr()
 
     assert exit_code == 0
-    assert captured.out.count("Funcao em desenvolvimento.") >= 7
+    assert "Fluxo seguro" in captured.out
+    assert "Perfis ativos" in captured.out
     assert "Relatorio final da sessao" in captured.out
 
 

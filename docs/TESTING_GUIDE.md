@@ -24,7 +24,7 @@ python -B -m pytest -p no:cacheprovider
 pytest --cov=. --cov-report=term-missing
 ```
 
-Na validacao atual, a suite chegou a 194 testes automatizados cobrindo core, CLI, configuracao, logs, relatorios, projetos, sessoes, modulos, plugins, utilitarios, erros, integracao, regressao, limpeza segura, Nmap, Nuclei, instalador assistido, scripts auxiliares e smoke tests.
+Na validacao atual, a suite chegou a 208 testes automatizados cobrindo core, CLI, configuracao, YAML, logs, relatorios, projetos, sessoes, modulos, plugins, utilitarios, erros, integracao, regressao, limpeza segura, Nmap, Nuclei, smart scan, baseline, instalador assistido, scripts auxiliares e smoke tests.
 
 ## Estrutura
 
@@ -43,7 +43,9 @@ Na validacao atual, a suite chegou a 194 testes automatizados cobrindo core, CLI
 - `tests/test_smoke.py`: inicializacao e comandos basicos.
 - `tests/test_cleanup.py`: limpeza segura de cache e preservacao de dados importantes.
 - `tests/test_scanner_service.py`: validacao de alvos, montagem segura de comandos, ausencia de `shell=True`, parsing Nmap XML, parsing Nuclei JSONL, ferramentas ausentes e timeout.
-- `tests/test_scanner_modules.py`: modulos Nmap/Nuclei, cancelamento sem autorizacao, confirmacao extra, relatorios por ferramenta e historico.
+- `tests/test_scanner_modules.py`: modulos Nmap/Nuclei/smart scan, cancelamento sem autorizacao, confirmacao extra, relatorios por ferramenta, correlacao e historico.
+- `tests/test_smart_scan_service.py`: selecao de endpoints web, decisoes do motor, correlacao Nmap/Nuclei e score de risco.
+- `tests/test_baseline.py`: criacao e comparacao de baseline, novos servicos, mudancas de versao e achados persistentes/resolvidos.
 - `tests/test_setup_service.py`: verificacao de ambiente, Python, pip, Git, Nmap, Nuclei, gerenciadores de pacote, relatorios de setup e comandos seguros sem `shell=True`.
 - `tests/test_setup_scripts.py`: entradas auxiliares `check_tools`, `setup_report` e `setup_wizard` sem instalar ferramentas reais.
 

@@ -12,7 +12,10 @@ Esta implementacao segue os documentos oficiais em `docs/MASTER_PROMPT.md` e `do
 - Instalador assistido para verificar Python, pip, Git, dependencias, estrutura do projeto, Nmap, Nuclei, permissoes e capacidade de execucao.
 - Gerenciador de modulos com descoberta automatica, metadados, estados, execucao, eventos e isolamento de falhas.
 - Modulos internos `nmap_scan` e `nuclei_scan` para analises autorizadas com confirmacao obrigatoria.
+- Modulo `smart_scan` para correlacionar Nmap + Nuclei, selecionar endpoints web relevantes e priorizar risco.
+- Baseline defensivo para comparar exposicoes antes/depois, novas portas, servicos removidos, mudancas de versao e achados persistentes.
 - Sistema centralizado de configuracao com valores padrao, validacao e persistencia.
+- Configuracao YAML segura em `config/sentinelscan.yaml`, com exemplo em `config/sentinelscan.example.yaml`.
 - Logs rotativos, trilha de auditoria estruturada em JSONL e historico interno de acoes.
 - Gerenciamento de projetos e sessoes com catalogo, historico e integridade de arquivos.
 - Gerador de relatorios em Markdown, TXT, JSON, CSV e HTML com metadados padronizados.
@@ -95,6 +98,7 @@ python main.py modules run system_health --report --report-format html
 python main.py modules list
 python main.py scan nmap 127.0.0.1 --authorize
 python main.py scan nuclei http://localhost --authorize
+python main.py scan smart 127.0.0.1 --authorize
 ```
 
 Gerar relatorio manual:
@@ -118,6 +122,104 @@ python main.py maintenance clean-temp --yes
 ```
 
 O primeiro comando apenas mostra uma simulacao. A limpeza real exige `--yes` e remove somente conteudo descartavel do cache.
+
+## Smart Scan Nmap + Nuclei
+
+O `smart_scan` executa um fluxo autorizado e correlacionado:
+
+1. Valida o alvo ou lista de alvos.
+2. Exige confirmacao explicita com `--authorize`.
+3. Executa Nmap com perfil seguro.
+4. Extrai host, IP, hostnames, status, portas, protocolo, servico, versao, tecnologias e sistema operacional quando disponivel.
+5. Seleciona apenas portas e servicos com caracteristica web.
+6. Monta endpoints HTTP/HTTPS automaticamente.
+7. Executa Nuclei somente nesses endpoints, se o Nuclei estiver instalado.
+8. Correlaciona achados com host, porta, servico, tecnologia, template, severidade, evidencia e recomendacao.
+9. Gera score de risco priorizado: `Critico`, `Alto`, `Medio`, `Baixo` ou `Informativo`.
+
+Exemplos:
+
+```bash
+python main.py scan smart 127.0.0.1 --authorize
+python main.py scan smart 192.168.1.10 --profile intermediate --authorize
+python main.py scan smart 192.168.1.10 --profile advanced --authorize --extra-confirm
+python main.py scan smart 192.168.1.10 --profile custom --ports 80,443 --template exposures/ --authorize --extra-confirm
+```
+
+Filtros controlados do Nuclei:
+
+```bash
+python main.py scan smart 127.0.0.1 --authorize --tag tech --severity medium --severity high
+```
+
+NSE controlado do Nmap:
+
+```bash
+python main.py scan smart 127.0.0.1 --profile advanced --nse-profile safe --authorize --extra-confirm
+```
+
+Regras de seguranca:
+
+- Nao existe modo stealth, evasao, exploit automatico ou brute force.
+- Advanced/custom exigem `--extra-confirm`.
+- Nuclei nao roda se nao houver endpoint web relevante.
+- Se Nuclei nao estiver instalado, o smart scan continua com Nmap e registra a decisao.
+- Todos os subprocessos usam lista de argumentos e `shell=False`.
+
+Relatorios:
+
+```text
+reports/<projeto-ou-global>/<ano>/<mes>/<dia>/<sessao-ou-sessionless>/smart-scan/
+```
+
+## Baseline Defensivo
+
+O baseline salva um estado conhecido de hosts, portas, servicos, versoes e achados. Depois, compara uma nova execucao para destacar:
+
+- novos servicos;
+- servicos removidos;
+- mudancas de versao;
+- novos achados;
+- achados resolvidos;
+- achados persistentes.
+
+Criar baseline a partir de um JSON de scan ou relatorio:
+
+```bash
+python main.py baseline create lab-interno --data resultado-smart.json
+```
+
+Comparar uma nova execucao:
+
+```bash
+python main.py baseline compare lab-interno --data resultado-smart-novo.json
+```
+
+Os baselines ficam em:
+
+```text
+data/baselines/
+```
+
+## Configuracao YAML
+
+O SentinelScan carrega `config/default_config.json`, depois aplica uma sobreposicao segura de `config/sentinelscan.yaml` quando o arquivo existir. Se o YAML estiver corrompido, a aplicacao usa padroes seguros e expõe um aviso em `runtime.yaml_warning`.
+
+Arquivos:
+
+```text
+config/sentinelscan.yaml
+config/sentinelscan.example.yaml
+```
+
+A configuracao YAML permite ajustar:
+
+- perfil padrao;
+- timeout, concorrencia, rate limit e maximo de alvos;
+- portas web usadas pelo smart scan;
+- tags, severidades, templates e diretorios do Nuclei;
+- perfis e scripts NSE permitidos;
+- alertas e baseline.
 
 ## Instalador assistido
 
@@ -495,9 +597,9 @@ No menu principal:
 - Digite o numero da opcao e pressione Enter.
 - Use `1` para abrir Network Recon Autorizado com Nmap.
 - Use `2` para abrir Web Vulnerability Audit com Nuclei.
-- Use `3` a `8` para telas claramente marcadas como funcoes em desenvolvimento.
+- Use `3` a `8` para fluxos guiados defensivos de API, TLS, CVE, hardening, logs e OSINT tecnico.
 - Use `9` para abrir o Report Center.
-- Use `10` para Scan Profile Manager, tambem marcado como funcao em desenvolvimento.
+- Use `10` para ver perfis de scan e orientacoes de configuracao.
 - Use `11` para consultar historico.
 - Use `12` para Configuracoes, Verificar ambiente, Instalador assistido e Verificar Nmap/Nuclei.
 - Use `13` para listar modulos.
@@ -736,7 +838,7 @@ A licenca do projeto esta em `LICENSE`. Leia esse arquivo antes de redistribuir,
 
 ## Testes
 
-A suite usa `pytest` e cobre nucleo, CLI, configuracao, logs, relatorios, projetos, sessoes, modulos, plugins, utilitarios, erros, integracao, regressao, limpeza segura, Nmap, Nuclei, instalador assistido e smoke tests. A validacao atual consolidou 194 testes automatizados.
+A suite usa `pytest` e cobre nucleo, CLI, configuracao, YAML, logs, relatorios, projetos, sessoes, modulos, plugins, utilitarios, erros, integracao, regressao, limpeza segura, Nmap, Nuclei, smart scan, baseline, instalador assistido e smoke tests. A validacao atual consolidou 208 testes automatizados.
 
 ```bash
 pytest
@@ -778,6 +880,8 @@ Arquivos principais da suite:
 - `tests/test_cleanup.py`
 - `tests/test_scanner_service.py`
 - `tests/test_scanner_modules.py`
+- `tests/test_smart_scan_service.py`
+- `tests/test_baseline.py`
 - `tests/test_setup_service.py`
 - `tests/test_setup_scripts.py`
 
@@ -785,7 +889,7 @@ Todos os testes usam diretorios temporarios isolados para evitar lixo operaciona
 
 ## Seguranca e escopo
 
-O projeto foi implementado para fluxos autorizados. Inventario, saude do runtime, resumo de projetos, Nmap e Nuclei foram integrados com validacao de entrada, confirmacao obrigatoria, comandos montados sem `shell=True`, relatorios e historico. Qualquer uso deve ocorrer apenas em ambientes proprios, laboratorios, redes internas ou ativos com autorizacao explicita.
+O projeto foi implementado para fluxos autorizados. Inventario, saude do runtime, resumo de projetos, Nmap, Nuclei, smart scan e baseline foram integrados com validacao de entrada, confirmacao obrigatoria, comandos montados sem `shell=True`, relatorios e historico. Qualquer uso deve ocorrer apenas em ambientes proprios, laboratorios, redes internas ou ativos com autorizacao explicita.
 
 ## Documentacao
 
@@ -797,3 +901,4 @@ O projeto foi implementado para fluxos autorizados. Inventario, saude do runtime
 - `docs/DEVELOPER_GUIDE.md`
 - `docs/PLUGIN_GUIDE.md`
 - `docs/MODULE_GUIDE.md`
+- `docs/SMART_SCAN_GUIDE.md`

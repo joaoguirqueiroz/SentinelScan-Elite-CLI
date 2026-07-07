@@ -118,6 +118,8 @@ class TerminalRenderer:
                     "Gerar relatorios: use 'reports generate' ou execute modulo com '--report'.",
                     "Usar Nmap: python main.py scan nmap <alvo> --authorize.",
                     "Usar Nuclei: python main.py scan nuclei <alvo> --authorize.",
+                    "Smart scan: python main.py scan smart <alvo> --authorize.",
+                    "Baseline: python main.py baseline create nome --data resultado.json.",
                     "Instalador assistido: python scripts/setup_wizard.py ou python main.py setup wizard.",
                     "Listar modulos: use 'modules list' ou a opcao 13 no menu interativo.",
                     "Relatorios ficam em reports/<projeto>/<ano>/<mes>/<dia>/<sessao>/<ferramenta>.",
@@ -132,6 +134,8 @@ class TerminalRenderer:
             {"command": "python main.py modules list", "purpose": "Listar modulos"},
             {"command": "python main.py scan nmap 127.0.0.1 --authorize", "purpose": "Nmap autorizado"},
             {"command": "python main.py scan nuclei http://localhost --authorize", "purpose": "Nuclei autorizado"},
+            {"command": "python main.py scan smart 127.0.0.1 --authorize", "purpose": "Correlacionar Nmap e Nuclei"},
+            {"command": "python main.py baseline compare base --data resultado.json", "purpose": "Comparar exposicao"},
             {"command": "python main.py setup check", "purpose": "Verificar ambiente e ferramentas"},
             {"command": "python scripts/setup_wizard.py", "purpose": "Abrir instalador assistido"},
             {"command": "python main.py reports list", "purpose": "Listar relatorios"},
@@ -184,6 +188,57 @@ class TerminalRenderer:
         )
         if reports:
             self.print_table(reports, ["format", "path", "generated_at"])
+
+    def print_smart_scan_result(self, result: dict[str, Any]) -> None:
+        data = result.get("data", {})
+        correlation = data.get("correlation", {})
+        summary = correlation.get("summary", {})
+        reports = data.get("reports", [])
+        self.print_panel(
+            "Smart Scan",
+            [
+                f"Status: {result.get('status')}",
+                f"Sucesso: {result.get('success')}",
+                f"Perfil: {data.get('profile')}",
+                f"Hosts: {summary.get('hosts', 0)}",
+                f"Portas abertas: {summary.get('open_ports', 0)}",
+                f"Endpoints web: {summary.get('web_endpoints', 0)}",
+                f"Achados: {summary.get('findings', 0)}",
+                f"Relatorios: {len(reports)}",
+            ],
+            style="green" if result.get("success") else "red",
+        )
+        findings = correlation.get("findings", [])
+        if findings:
+            self.print_table(
+                findings[:10],
+                ["risk", "severity", "target", "port", "service", "template"],
+            )
+        decisions = correlation.get("decisions", [])
+        if decisions:
+            self.print_panel("Decisoes do motor", decisions[:8], style="cyan")
+        if reports:
+            self.print_table(reports, ["format", "path", "generated_at"])
+
+    def print_baseline_compare(self, result: dict[str, Any]) -> None:
+        summary = result.get("summary", {})
+        self.print_panel(
+            "Baseline Compare",
+            [
+                f"Status: {summary.get('status')}",
+                f"Novos servicos: {summary.get('new_services', 0)}",
+                f"Servicos removidos: {summary.get('removed_services', 0)}",
+                f"Novos achados: {summary.get('new_findings', 0)}",
+                f"Achados resolvidos: {summary.get('resolved_findings', 0)}",
+                f"Mudancas de versao: {summary.get('version_changes', 0)}",
+            ],
+            style="yellow" if summary.get("status") == "changed" else "green",
+        )
+        rows = []
+        for key in ("new_services", "removed_services", "new_findings", "resolved_findings"):
+            rows.extend({"type": key, "value": value} for value in result.get(key, []))
+        if rows:
+            self.print_table(rows[:20], ["type", "value"])
 
     def print_setup_report(self, report: dict[str, Any]) -> None:
         checks = report.get("checks", [])

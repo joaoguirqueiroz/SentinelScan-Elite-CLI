@@ -13,7 +13,7 @@
 - Menu principal interativo.
 - Network Recon Autorizado (Nmap).
 - Web Vulnerability Audit (Nuclei).
-- Funcoes em desenvolvimento do menu principal.
+- Fluxos guiados defensivos do menu principal.
 - Report Center.
 - Historico.
 - Configuracoes.
@@ -53,7 +53,7 @@
 
 ## Problemas corrigidos
 
-- Todas as opcoes do menu principal agora abrem uma tela funcional ou uma mensagem clara de `Funcao em desenvolvimento`.
+- Todas as opcoes do menu principal agora abrem uma tela funcional, fluxo guiado seguro ou recurso operacional implementado.
 - Configuracoes ganhou submenu com `Ver configuracao atual`, `Verificar ambiente`, `Instalador assistido`, `Verificar Nmap/Nuclei` e `Voltar`.
 - Limpeza interativa agora mostra aviso, simula, pede confirmacao e permite cancelar sem apagar arquivos.
 - Report Center ganhou submenu para listar relatorios, gerar relatorio manual e voltar.
@@ -64,13 +64,8 @@
 
 ## Funcoes que ainda precisam de melhoria
 
-- Implementar funcionalidade real para API Security Audit.
-- Implementar funcionalidade real para SSL/TLS Inspector.
-- Implementar funcionalidade real para CVE Intelligence.
-- Implementar funcionalidade real para Linux Hardening Audit.
-- Implementar funcionalidade real para Log Threat Analyzer.
-- Implementar funcionalidade real para OSINT Tecnico.
-- Implementar gerenciador persistente de perfis de scan.
+- Evoluir os fluxos guiados de API, TLS, CVE, hardening, logs e OSINT para modulos especializados completos.
+- Implementar gerenciador persistente de perfis de scan com criacao, edicao e restauracao de padroes.
 - Adicionar um navegador interno de relatorios com filtros por projeto, data, sessao e ferramenta.
 - Adicionar verificacao opcional de templates Nuclei com confirmacao para atualizacao/baixar templates.
 
@@ -81,14 +76,14 @@
 | Tela inicial/dashboard | Inicio do modo interativo | OK | Nenhum bloqueador encontrado | Mantida renderizacao com painel, status e aviso etico | OK |
 | Nmap | Menu principal > 1 | OK | Exige ferramenta externa para execucao real | Mantido cancelamento seguro sem autorizacao e testes com mocks | OK |
 | Nuclei | Menu principal > 2 | OK | Exige ferramenta externa para execucao real | Mantido cancelamento seguro sem autorizacao e testes com mocks | OK |
-| API Security Audit | Menu principal > 3 | Parcial | Funcao ainda nao implementada | Tela clara de `Funcao em desenvolvimento` e retorno ao menu | OK controlado |
-| SSL/TLS Inspector | Menu principal > 4 | Quebrado | Opcao aparecia, mas caia como invalida | Handler de funcao em desenvolvimento | OK controlado |
-| CVE Intelligence | Menu principal > 5 | Quebrado | Opcao aparecia, mas caia como invalida | Handler de funcao em desenvolvimento | OK controlado |
-| Linux Hardening Audit | Menu principal > 6 | Quebrado | Opcao aparecia, mas caia como invalida | Handler de funcao em desenvolvimento | OK controlado |
-| Log Threat Analyzer | Menu principal > 7 | Quebrado | Opcao aparecia, mas caia como invalida | Handler de funcao em desenvolvimento | OK controlado |
-| OSINT Tecnico | Menu principal > 8 | Quebrado | Opcao aparecia, mas caia como invalida | Handler de funcao em desenvolvimento | OK controlado |
+| API Security Audit | Menu principal > 3 | Parcial | Fluxo especializado ainda ausente | Fluxo guiado seguro para planejamento de auditoria API autorizada | OK |
+| SSL/TLS Inspector | Menu principal > 4 | Quebrado | Opcao aparecia, mas caia como invalida | Fluxo guiado seguro para revisao TLS autorizada | OK |
+| CVE Intelligence | Menu principal > 5 | Quebrado | Opcao aparecia, mas caia como invalida | Fluxo guiado defensivo para correlacao manual de servico/versao/CVE | OK |
+| Linux Hardening Audit | Menu principal > 6 | Quebrado | Opcao aparecia, mas caia como invalida | Fluxo guiado local para checklist de hardening | OK |
+| Log Threat Analyzer | Menu principal > 7 | Quebrado | Opcao aparecia, mas caia como invalida | Fluxo guiado para revisao dos logs da propria aplicacao | OK |
+| OSINT Tecnico | Menu principal > 8 | Quebrado | Opcao aparecia, mas caia como invalida | Fluxo passivo para organizacao de evidencias fornecidas pelo usuario | OK |
 | Report Center | Menu principal > 9 | Parcial | Listagem direta sem submenu de navegacao | Submenu com listar, gerar manual e voltar | OK |
-| Scan Profile Manager | Menu principal > 10 | Quebrado | Opcao aparecia, mas caia como invalida | Handler de funcao em desenvolvimento | OK controlado |
+| Scan Profile Manager | Menu principal > 10 | Quebrado | Opcao aparecia, mas caia como invalida | Fluxo guiado com perfis ativos e configuracao YAML | OK |
 | Historico | Menu principal > 11 | OK | Nenhum bloqueador encontrado | Mantida listagem de eventos recentes | OK |
 | Configuracoes | Menu principal > 12 | Parcial | Apenas imprimia JSON da configuracao | Submenu com configuracao, setup e verificacao de ferramentas | OK |
 | Verificar ambiente | Configuracoes > 2 | Ausente | Funcao nao existia no menu | Integrado ao `SetupService` e gera relatorio TXT/JSON | OK |
@@ -126,4 +121,4 @@ python main.py modules list
 - Menu principal revisado opcao por opcao.
 - Submenus principais revisados.
 - Testes automatizados ampliados.
-- Ultima suite automatizada registrada nesta rodada: `194 passed`.
+- Ultima suite automatizada registrada nesta rodada: `208 passed`.

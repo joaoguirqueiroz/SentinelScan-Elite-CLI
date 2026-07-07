@@ -67,11 +67,36 @@ def test_config_scanner_limits_fall_back_to_safe_defaults(runtime_root):
     )
 
     assert settings["scanners"]["defaults"] == {
+        "profile": "basic",
         "timeout": 60,
         "concurrency": 5,
         "rate_limit": 25,
         "max_targets": 25,
     }
+    assert settings["scanners"]["smart"]["default_profile"] == "basic"
+
+
+def test_config_loads_yaml_overlay(runtime_root):
+    yaml_file = runtime_root / "config" / "sentinelscan.yaml"
+    yaml_file.write_text(
+        "scanners:\n  defaults:\n    timeout: 45\n  smart:\n    large_target_threshold: 4\n",
+        encoding="utf-8",
+    )
+
+    settings = ConfigService(runtime_root).load()
+
+    assert settings["scanners"]["defaults"]["timeout"] == 45
+    assert settings["scanners"]["smart"]["large_target_threshold"] == 4
+
+
+def test_config_recovers_from_corrupted_yaml(runtime_root):
+    yaml_file = runtime_root / "config" / "sentinelscan.yaml"
+    yaml_file.write_text("scanners: [broken", encoding="utf-8")
+
+    settings = ConfigService(runtime_root).load()
+
+    assert settings["scanners"]["defaults"]["timeout"] == 60
+    assert "yaml_warning" in settings["runtime"]
 
 
 def test_config_rejects_unsafe_paths(runtime_root):

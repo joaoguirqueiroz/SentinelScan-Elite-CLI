@@ -11,6 +11,13 @@ Todas as mudancas relevantes do SentinelScan Elite CLI serao registradas neste a
 - Integracao do Nmap como modulo interno `nmap_scan`, com perfis `quick`, `basic`, `services`, `ports` e `custom`.
 - Integracao do Nuclei como modulo interno `nuclei_scan`, com perfis `basic`, `technologies`, `exposure`, `low-medium`, `high` e `custom`.
 - Comandos `scan nmap` e `scan nuclei` com confirmacao obrigatoria de autorizacao e confirmacao extra para perfis avancados/personalizados.
+- Modulo `smart_scan` para correlacionar descoberta Nmap, endpoints web selecionados e achados Nuclei.
+- Comando `scan smart` com perfis `basic`, `intermediate`, `advanced` e `custom`.
+- Servico `SmartScanService` para selecao inteligente de endpoints web, decisoes rastreaveis, correlacao e score de risco.
+- Servico `BaselineService` e comandos `baseline create` / `baseline compare` para baseline defensivo de exposicoes.
+- Configuracao YAML segura em `config/sentinelscan.yaml` e exemplo em `config/sentinelscan.example.yaml`.
+- Suporte controlado a NSE do Nmap com perfis/scripts permitidos.
+- Filtros adicionais de Nuclei por tags, severidades, templates e diretorios de templates.
 - Exportacao de relatorios nos formatos Markdown, TXT, JSON, CSV e HTML.
 - Organizacao automatica de relatorios por projeto, data, sessao e ferramenta (`nmap`/`nuclei`).
 - Historico interno enriquecido com funcao executada, data/hora, resultado e erro tecnico quando houver.
@@ -22,7 +29,7 @@ Todas as mudancas relevantes do SentinelScan Elite CLI serao registradas neste a
 - Relatorios de setup em `reports/setup/setup_report.txt` e `reports/setup/setup_report.json`.
 - Submenu de configuracoes com `Verificar ambiente`, `Instalador assistido` e `Verificar Nmap/Nuclei`.
 - Documento `docs/FUNCTIONAL_AUDIT.md` com matriz funcional opcao por opcao.
-- Suite ampliada para 194 testes automatizados, cobrindo os novos fluxos de CLI, relatorios, configuracao, historico, limpeza, Nmap, Nuclei, instalador assistido, scripts e resumo de sessao.
+- Suite ampliada para 208 testes automatizados, cobrindo os novos fluxos de CLI, YAML, relatorios, configuracao, historico, limpeza, Nmap, Nuclei, smart scan, baseline, instalador assistido, scripts e resumo de sessao.
 - Arquivo `requirements.txt` raiz apontando para as dependencias de execucao.
 - Dependencia `rich` para experiencia visual profissional em terminais compativeis, com fallback ASCII.
 
@@ -30,11 +37,14 @@ Todas as mudancas relevantes do SentinelScan Elite CLI serao registradas neste a
 
 - Tratamento de erros da CLI com mensagens amigaveis ao usuario e detalhes tecnicos persistidos em logs e historico.
 - Tratamento de erros para Nmap/Nuclei ausentes, alvos invalidos, timeout, saida vazia, parsing XML/JSONL e templates/configuracoes invalidas.
+- Parser Nmap enriquecido com hostnames, IP, sistema operacional, produto, versao e tecnologias quando disponiveis no XML.
+- Priorizacao de risco combinando severidade, endpoint correlacionado, servico, versao e evidencia.
 - README com secao completa "Como executar no Linux", comandos por distribuicao, primeira execucao, atualizacao, solucao de problemas, FAQ, desenvolvimento e licenca.
 - README com secoes dedicadas ao uso de Nmap e Nuclei no SentinelScan Elite CLI.
+- README com secoes para Smart Scan, Baseline Defensivo e Configuracao YAML.
 - README com secao "Instalador assistido", incluindo execucao, verificacoes, Nmap, Nuclei, relatorios e erros comuns.
 - Guia de testes atualizado com a cobertura dos novos componentes.
-- Navegacao interativa revisada para que todas as opcoes do menu principal abram uma tela, executem um fluxo implementado ou informem claramente "Funcao em desenvolvimento".
+- Navegacao interativa revisada para substituir telas marcadas como desenvolvimento por fluxos guiados defensivos.
 
 ### Corrigido
 
@@ -42,6 +52,7 @@ Todas as mudancas relevantes do SentinelScan Elite CLI serao registradas neste a
 - Validacao de configuracao agora aceita todos os formatos de relatorio suportados.
 - Opcao "Listar modulos" agora usa renderizacao dedicada, mostra Nmap/Nuclei, informa estado/categoria/versao e exibe mensagem amigavel quando nao ha modulos carregados.
 - Opcoes `4`, `5`, `6`, `7`, `8` e `10` do menu interativo deixaram de cair como invalidas e agora exibem status funcional claro.
+- Opcoes `3`, `4`, `5`, `6`, `7`, `8` e `10` agora exibem fluxos guiados seguros em vez de mensagens de desenvolvimento.
 - Fluxo interativo de limpeza agora mostra aviso, simula, pede confirmacao e permite cancelar sem apagar arquivos.
 - Fluxo interativo de relatorios agora abre o Report Center, lista relatorios e permite gerar relatorio manual com validacao JSON.
 

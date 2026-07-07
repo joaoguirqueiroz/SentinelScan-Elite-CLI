@@ -19,6 +19,8 @@ NMAP_XML = """<?xml version="1.0"?>
   <host>
     <status state="up"/>
     <address addr="127.0.0.1" addrtype="ipv4"/>
+    <hostnames><hostname name="localhost" type="user"/></hostnames>
+    <os><osmatch name="Linux 6.x" accuracy="98"/></os>
     <ports>
       <port protocol="tcp" portid="80">
         <state state="open"/>
@@ -116,8 +118,47 @@ def test_scanner_service_parse_nmap_xml(runtime_root):
     hosts = service.parse_nmap_xml(NMAP_XML)
 
     assert hosts[0]["host"] == "127.0.0.1"
+    assert hosts[0]["hostnames"][0]["name"] == "localhost"
+    assert hosts[0]["os"] == "Linux 6.x"
     assert hosts[0]["ports"][0]["service"] == "http"
     assert hosts[0]["ports"][0]["version"] == "nginx 1.25"
+    assert "nginx" in hosts[0]["ports"][0]["technologies"]
+
+
+def test_scanner_service_builds_controlled_nse_args(runtime_root):
+    service = ScannerService(runtime_root)
+
+    command = service.build_nmap_command(
+        "127.0.0.1",
+        runtime_root / "reports" / "nmap",
+        nse_profile="safe",
+    )
+
+    assert "--script" in command.args
+    assert "safe" in command.args
+
+    with pytest.raises(ValidationError):
+        service.build_nmap_command(
+            "127.0.0.1",
+            runtime_root / "reports" / "nmap",
+            nse_scripts=["vuln"],
+        )
+
+
+def test_scanner_service_builds_nuclei_tags_and_severities(runtime_root):
+    service = ScannerService(runtime_root)
+
+    command = service.build_nuclei_command(
+        ["http://localhost"],
+        runtime_root / "reports" / "nuclei",
+        tags=["tech,exposure"],
+        severities=["low", "medium"],
+    )
+
+    assert "-tags" in command.args
+    assert "exposure,tech" in command.args
+    assert "-severity" in command.args
+    assert "low,medium" in command.args
 
 
 def test_scanner_service_parse_nmap_xml_errors(runtime_root):

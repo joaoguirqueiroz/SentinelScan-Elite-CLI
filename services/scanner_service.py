@@ -98,6 +98,12 @@ class ScannerService:
         "personalizado": "custom",
     }
     NMAP_CUSTOM_FLAGS = {"-sV", "--version-light", "-Pn", "-F"}
+    NMAP_NSE_PROFILE_SCRIPTS = {
+        "default-safe": ["default", "safe"],
+        "discovery": ["discovery"],
+        "version": ["version"],
+        "safe": ["safe"],
+    }
 
     NUCLEI_PROFILE_ALIASES = {
         "basic": "basic",
@@ -178,6 +184,8 @@ class ScannerService:
         profile: str = "basic",
         ports: str | None = None,
         custom_flags: list[str] | None = None,
+        nse_profile: str | None = None,
+        nse_scripts: list[str] | None = None,
         timeout: int | None = None,
     ) -> ScannerCommand:
         selected_profile = self.normalize_nmap_profile(profile)
@@ -198,6 +206,8 @@ class ScannerService:
             args.extend(["-T2", *self.validate_custom_nmap_flags(custom_flags or [])])
             if ports:
                 args.extend(["-p", self.validate_ports(ports)])
+        script_args = self.build_nse_script_args(nse_profile, nse_scripts)
+        args.extend(script_args)
         args.append(selected_target)
         return ScannerCommand(
             "nmap",
@@ -213,6 +223,9 @@ class ScannerService:
         output_dir: Path,
         profile: str = "basic",
         templates: list[str] | None = None,
+        template_dirs: list[str] | None = None,
+        tags: list[str] | None = None,
+        severities: list[str] | None = None,
         timeout: int | None = None,
         concurrency: int | None = None,
         rate_limit: int | None = None,
@@ -250,6 +263,14 @@ class ScannerService:
             args.extend(["-severity", "high,critical"])
         elif selected_profile == "custom":
             args.extend(self.validate_nuclei_templates(templates or []))
+        if template_dirs:
+            args.extend(self.validate_nuclei_templates(template_dirs))
+        clean_tags = self.validate_nuclei_tags(tags or [])
+        if clean_tags:
+            args.extend(["-tags", ",".join(clean_tags)])
+        clean_severities = self.validate_nuclei_severities(severities or [])
+        if clean_severities:
+            args.extend(["-severity", ",".join(clean_severities)])
         if len(selected_targets) == 1:
             args.extend(["-u", selected_targets[0]])
         else:
@@ -341,9 +362,26 @@ class ScannerService:
         for host in root.findall("host"):
             address_node = host.find("address")
             status_node = host.find("status")
+            hostnames = [
+                {"name": item.get("name", ""), "type": item.get("type", "")}
+                for item in host.findall("./hostnames/hostname")
+                if item.get("name")
+            ]
+            os_matches = [
+                {
+                    "name": item.get("name", ""),
+                    "accuracy": item.get("accuracy", ""),
+                }
+                for item in host.findall("./os/osmatch")
+                if item.get("name")
+            ]
             host_payload = {
                 "host": address_node.get("addr") if address_node is not None else "",
+                "ip": address_node.get("addr") if address_node is not None else "",
+                "hostnames": hostnames,
                 "status": status_node.get("state") if status_node is not None else "unknown",
+                "os": os_matches[0]["name"] if os_matches else "",
+                "os_matches": os_matches,
                 "ports": [],
             }
             for port in host.findall("./ports/port"):
@@ -356,6 +394,8 @@ class ScannerService:
                         "state": state_node.get("state") if state_node is not None else "unknown",
                         "service": service_node.get("name") if service_node is not None else "",
                         "version": _service_version(service_node),
+                        "product": service_node.get("product") if service_node is not None else "",
+                        "technologies": _service_technologies(service_node),
                     }
                 )
             hosts.append(host_payload)
@@ -416,6 +456,41 @@ class ScannerService:
                 raise ValidationError(f"Custom Nmap flag '{flag}' is not allowed.")
         return list(flags)
 
+    def build_nse_script_args(
+        self, nse_profile: str | None = None, scripts: list[str] | None = None
+    ) -> list[str]:
+        if not nse_profile and not scripts:
+            return []
+        allowed_profiles = set(
+            self.settings.get("scanners", {})
+            .get("nmap", {})
+            .get("allowed_nse_profiles", [])
+        ) or {"default-safe", "discovery", "version", "safe", "custom-authorized"}
+        allowed_scripts = set(
+            self.settings.get("scanners", {})
+            .get("nmap", {})
+            .get("allowed_nse_scripts", [])
+        ) or {"default", "discovery", "version", "safe", "http-title", "http-headers"}
+        selected_scripts: list[str] = []
+        if nse_profile:
+            clean_profile = self._clean_value(nse_profile, "nse_profile")
+            if clean_profile not in allowed_profiles:
+                raise ValidationError(f"NSE profile '{clean_profile}' is not allowed.")
+            if clean_profile == "custom-authorized":
+                selected_scripts.extend(scripts or [])
+            else:
+                selected_scripts.extend(self.NMAP_NSE_PROFILE_SCRIPTS.get(clean_profile, []))
+        selected_scripts.extend(scripts or [])
+        if not selected_scripts:
+            return []
+        clean_scripts = []
+        for script in selected_scripts:
+            clean = self._clean_value(script, "nse_script")
+            if clean not in allowed_scripts:
+                raise ValidationError(f"NSE script '{clean}' is not allowed.")
+            clean_scripts.append(clean)
+        return ["--script", ",".join(sorted(set(clean_scripts)))]
+
     def validate_nuclei_templates(self, templates: list[str]) -> list[str]:
         args: list[str] = []
         for template in templates:
@@ -424,6 +499,26 @@ class ScannerService:
                 raise ValidationError("Template value contains unsafe characters.")
             args.extend(["-t", clean])
         return args
+
+    def validate_nuclei_tags(self, tags: list[str]) -> list[str]:
+        clean_tags: list[str] = []
+        for tag in tags:
+            clean = self._clean_value(tag, "tag").lower()
+            if not re.fullmatch(r"[a-z0-9_,.-]{1,64}", clean):
+                raise ValidationError(f"Nuclei tag '{tag}' is invalid.")
+            clean_tags.extend([item for item in clean.split(",") if item])
+        return sorted(set(clean_tags))
+
+    def validate_nuclei_severities(self, severities: list[str]) -> list[str]:
+        clean_severities: list[str] = []
+        for severity in severities:
+            clean = self._clean_value(severity, "severity").lower()
+            values = [item for item in clean.split(",") if item]
+            invalid = [item for item in values if item not in self.NUCLEI_SEVERITIES]
+            if invalid:
+                raise ValidationError(f"Nuclei severity '{invalid[0]}' is invalid.")
+            clean_severities.extend(values)
+        return sorted(set(clean_severities))
 
     def _write_target_file(self, output_dir: Path, targets: list[str]) -> Path:
         ensure_dir(output_dir)
@@ -481,3 +576,14 @@ def _service_version(service_node: ElementTree.Element | None) -> str:
         service_node.get("extrainfo", ""),
     ]
     return " ".join(part for part in parts if part)
+
+
+def _service_technologies(service_node: ElementTree.Element | None) -> list[str]:
+    if service_node is None:
+        return []
+    values = [
+        service_node.get("name", ""),
+        service_node.get("product", ""),
+        service_node.get("version", ""),
+    ]
+    return [value for value in values if value]

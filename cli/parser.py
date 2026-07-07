@@ -129,6 +129,41 @@ def build_parser() -> argparse.ArgumentParser:
     scan_nuclei.add_argument("--authorize", action="store_true")
     scan_nuclei.add_argument("--extra-confirm", action="store_true")
 
+    scan_smart = scan_sub.add_parser("smart", help="Run Nmap discovery and targeted Nuclei correlation.")
+    scan_smart.add_argument("target", nargs="+")
+    scan_smart.add_argument(
+        "--profile",
+        default="basic",
+        choices=["basic", "basico", "intermediate", "intermediario", "advanced", "avancado", "custom", "personalizado"],
+    )
+    scan_smart.add_argument("--ports")
+    scan_smart.add_argument("--timeout", type=int)
+    scan_smart.add_argument("--concurrency", type=int)
+    scan_smart.add_argument("--rate-limit", type=int)
+    scan_smart.add_argument("--max-targets", type=int)
+    scan_smart.add_argument("--custom-flag", action="append", default=[])
+    scan_smart.add_argument("--template", action="append", default=[])
+    scan_smart.add_argument("--template-dir", action="append", default=[])
+    scan_smart.add_argument("--tag", action="append", default=[])
+    scan_smart.add_argument("--severity", action="append", default=[])
+    scan_smart.add_argument("--nse-profile")
+    scan_smart.add_argument("--nse-script", action="append", default=[])
+    scan_smart.add_argument("--baseline")
+    scan_smart.add_argument("--project")
+    scan_smart.add_argument("--session")
+    scan_smart.add_argument("--formats", default="txt,json,csv,html")
+    scan_smart.add_argument("--authorize", action="store_true")
+    scan_smart.add_argument("--extra-confirm", action="store_true")
+
+    baseline = subparsers.add_parser("baseline", help="Create and compare defensive exposure baselines.")
+    baseline_sub = baseline.add_subparsers(dest="baseline_command", required=True)
+    baseline_create = baseline_sub.add_parser("create", help="Create a baseline from a JSON scan payload.")
+    baseline_create.add_argument("name")
+    baseline_create.add_argument("--data", required=True, help="Path to JSON scan payload.")
+    baseline_compare = baseline_sub.add_parser("compare", help="Compare a JSON scan payload with a baseline.")
+    baseline_compare.add_argument("name")
+    baseline_compare.add_argument("--data", required=True, help="Path to JSON scan payload.")
+
     reports = subparsers.add_parser("reports", help="Manage generated reports.")
     reports_sub = reports.add_subparsers(dest="reports_command", required=True)
     reports_sub.add_parser("list", help="List generated reports.")
