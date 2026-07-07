@@ -115,9 +115,18 @@ Use `config/sentinelscan.example.yaml` como referencia.
 ```bash
 python main.py reports generate --title "Resumo" --data "{\"status\":\"ok\"}"
 python main.py reports generate --title "Resumo HTML" --format html --data "{\"status\":\"ok\"}"
+python main.py reports generate --title "Resumo arquivo" --format json --data-file examples/assets.json
 ```
 
 Formatos suportados: `markdown`, `txt`, `json`, `csv` e `html`.
+
+No PowerShell, use `--%` quando precisar passar JSON inline com aspas:
+
+```powershell
+python --% main.py reports generate --title "Resumo" --format json --data "{\"status\":\"ok\"}"
+```
+
+Para uso recorrente, `--data-file` evita diferencas de citacao entre shells.
 
 Relatorios de ferramentas ficam em:
 

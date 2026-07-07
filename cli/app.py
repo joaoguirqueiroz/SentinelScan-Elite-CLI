@@ -312,7 +312,11 @@ def _handle_reports(args: Any, context: Any, renderer: TerminalRenderer) -> None
         renderer.print_table(reports, ["id", "title", "format", "project_id", "generated_at", "path"])
     elif args.reports_command == "generate":
         context.permission_manager.require("reports:write")
-        payload = _parse_json(args.data)
+        payload = (
+            _read_json_file(args.data_file)
+            if getattr(args, "data_file", None)
+            else _parse_json(args.data)
+        )
         record = context.report_service.generate_report(
             title=args.title,
             results={"success": True, "status": "manual", "data": payload},

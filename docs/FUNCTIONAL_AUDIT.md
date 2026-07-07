@@ -3,6 +3,7 @@
 ## Dados da auditoria
 
 - Data: 2026-07-06
+- Revalidacao adicional: 2026-07-07
 - Versao do projeto: 1.0.0
 - Fonte oficial consultada: `docs/MASTER_PROMPT.md` e `docs/TECHNICAL_SPECIFICATION.md`
 - Objetivo: validar o fluxo funcional da CLI, revisar menus, corrigir opcoes sem handler, adicionar instalador assistido, fortalecer testes e confirmar estabilidade com `pytest`.
@@ -50,6 +51,7 @@
 - Nao havia instalador assistido para verificar ambiente, Nmap e Nuclei.
 - Nao havia relatorio formal de setup em `reports/setup/`.
 - Durante os testes, a nova camada de setup tinha referencias antigas a `returncode` em vez do campo normalizado `return_code`.
+- Na revalidacao de 2026-07-07, o comando de relatorio manual com JSON inline falhou no PowerShell porque o shell removeu aspas internas do payload.
 
 ## Problemas corrigidos
 
@@ -61,6 +63,7 @@
 - Relatorios de setup TXT/JSON criados em `reports/setup/`.
 - Testes de setup, scripts e navegacao interativa adicionados.
 - Uso interno de `return_code` corrigido em todas as checagens do setup.
+- Comando `reports generate` ganhou `--data-file`, testes de regressao e documentacao para evitar falhas de citacao de JSON entre shells.
 
 ## Funcoes que ainda precisam de melhoria
 
@@ -83,6 +86,7 @@
 | Log Threat Analyzer | Menu principal > 7 | Quebrado | Opcao aparecia, mas caia como invalida | Fluxo guiado para revisao dos logs da propria aplicacao | OK |
 | OSINT Tecnico | Menu principal > 8 | Quebrado | Opcao aparecia, mas caia como invalida | Fluxo passivo para organizacao de evidencias fornecidas pelo usuario | OK |
 | Report Center | Menu principal > 9 | Parcial | Listagem direta sem submenu de navegacao | Submenu com listar, gerar manual e voltar | OK |
+| Relatorio manual por arquivo | `reports generate --data-file` | Ausente | JSON inline era fragil em PowerShell | Adicionado `--data-file` com validacao de arquivo JSON | OK |
 | Scan Profile Manager | Menu principal > 10 | Quebrado | Opcao aparecia, mas caia como invalida | Fluxo guiado com perfis ativos e configuracao YAML | OK |
 | Historico | Menu principal > 11 | OK | Nenhum bloqueador encontrado | Mantida listagem de eventos recentes | OK |
 | Configuracoes | Menu principal > 12 | Parcial | Apenas imprimia JSON da configuracao | Submenu com configuracao, setup e verificacao de ferramentas | OK |
@@ -111,6 +115,7 @@ python main.py setup tools
 python scripts/setup_wizard.py --check-only
 python main.py status
 python main.py modules list
+python main.py reports generate --title "Validacao funcional" --format json --data-file examples/assets.json
 ```
 
 ## Status final
@@ -121,4 +126,4 @@ python main.py modules list
 - Menu principal revisado opcao por opcao.
 - Submenus principais revisados.
 - Testes automatizados ampliados.
-- Ultima suite automatizada registrada nesta rodada: `208 passed`.
+- Ultima suite automatizada registrada nesta rodada: `210 passed`.

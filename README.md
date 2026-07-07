@@ -106,7 +106,16 @@ Gerar relatorio manual:
 ```bash
 python main.py reports generate --title "Resumo" --format json --data "{\"status\":\"ok\"}"
 python main.py reports generate --title "Resumo HTML" --format html --data "{\"status\":\"ok\"}"
+python main.py reports generate --title "Resumo arquivo" --format json --data-file examples/assets.json
 ```
+
+No Windows PowerShell, argumentos JSON inline podem exigir `--%` para preservar aspas:
+
+```powershell
+python --% main.py reports generate --title "Resumo" --format json --data "{\"status\":\"ok\"}"
+```
+
+Para evitar diferencas entre shells, prefira `--data-file` quando o payload for maior ou reutilizavel.
 
 Consultar auditoria:
 
@@ -838,7 +847,7 @@ A licenca do projeto esta em `LICENSE`. Leia esse arquivo antes de redistribuir,
 
 ## Testes
 
-A suite usa `pytest` e cobre nucleo, CLI, configuracao, YAML, logs, relatorios, projetos, sessoes, modulos, plugins, utilitarios, erros, integracao, regressao, limpeza segura, Nmap, Nuclei, smart scan, baseline, instalador assistido e smoke tests. A validacao atual consolidou 208 testes automatizados.
+A suite usa `pytest` e cobre nucleo, CLI, configuracao, YAML, logs, relatorios, projetos, sessoes, modulos, plugins, utilitarios, erros, integracao, regressao, limpeza segura, Nmap, Nuclei, smart scan, baseline, instalador assistido e smoke tests. A validacao atual consolidou 210 testes automatizados.
 
 ```bash
 pytest

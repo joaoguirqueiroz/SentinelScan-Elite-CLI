@@ -177,6 +177,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="markdown",
     )
     report_generate.add_argument("--data", default="{}", help="Inline JSON payload.")
+    report_generate.add_argument("--data-file", help="Path to a JSON payload file.")
 
     plugins = subparsers.add_parser("plugins", help="Manage plugins.")
     plugins_sub = plugins.add_subparsers(dest="plugins_command", required=True)

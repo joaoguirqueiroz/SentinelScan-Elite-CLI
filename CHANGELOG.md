@@ -29,7 +29,8 @@ Todas as mudancas relevantes do SentinelScan Elite CLI serao registradas neste a
 - Relatorios de setup em `reports/setup/setup_report.txt` e `reports/setup/setup_report.json`.
 - Submenu de configuracoes com `Verificar ambiente`, `Instalador assistido` e `Verificar Nmap/Nuclei`.
 - Documento `docs/FUNCTIONAL_AUDIT.md` com matriz funcional opcao por opcao.
-- Suite ampliada para 208 testes automatizados, cobrindo os novos fluxos de CLI, YAML, relatorios, configuracao, historico, limpeza, Nmap, Nuclei, smart scan, baseline, instalador assistido, scripts e resumo de sessao.
+- Opcao `--data-file` em `reports generate` para gerar relatorios manuais a partir de arquivos JSON.
+- Suite ampliada para 210 testes automatizados, cobrindo os novos fluxos de CLI, YAML, relatorios, configuracao, historico, limpeza, Nmap, Nuclei, smart scan, baseline, instalador assistido, scripts e resumo de sessao.
 - Arquivo `requirements.txt` raiz apontando para as dependencias de execucao.
 - Dependencia `rich` para experiencia visual profissional em terminais compativeis, com fallback ASCII.
 
@@ -45,6 +46,7 @@ Todas as mudancas relevantes do SentinelScan Elite CLI serao registradas neste a
 - README com secao "Instalador assistido", incluindo execucao, verificacoes, Nmap, Nuclei, relatorios e erros comuns.
 - Guia de testes atualizado com a cobertura dos novos componentes.
 - Navegacao interativa revisada para substituir telas marcadas como desenvolvimento por fluxos guiados defensivos.
+- Ajuda e documentacao agora mostram `--data-file` para evitar problemas de citacao de JSON em shells diferentes.
 
 ### Corrigido
 
@@ -56,6 +58,7 @@ Todas as mudancas relevantes do SentinelScan Elite CLI serao registradas neste a
 - Opcoes `3`, `4`, `5`, `6`, `7`, `8` e `10` agora exibem fluxos guiados seguros em vez de mensagens de desenvolvimento.
 - Fluxo interativo de limpeza agora mostra aviso, simula, pede confirmacao e permite cancelar sem apagar arquivos.
 - Fluxo interativo de relatorios agora abre o Report Center, lista relatorios e permite gerar relatorio manual com validacao JSON.
+- Geracao manual de relatorios agora possui caminho por arquivo JSON, reduzindo falhas de uso com JSON inline no PowerShell.
 
 ## [1.0.0] - 2026-07-06
 

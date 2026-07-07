@@ -137,6 +137,7 @@ class TerminalRenderer:
             {"command": "python main.py baseline compare base --data resultado.json", "purpose": "Comparar exposicao"},
             {"command": "python main.py setup check", "purpose": "Verificar ambiente e ferramentas"},
             {"command": "python scripts/setup_wizard.py", "purpose": "Abrir instalador assistido"},
+            {"command": "python main.py reports generate --data-file arquivo.json", "purpose": "Relatorio com JSON de arquivo"},
             {"command": "python main.py reports list", "purpose": "Listar relatorios"},
             {"command": "python main.py maintenance clean-temp", "purpose": "Simular limpeza segura"},
             {"command": "python main.py maintenance clean-temp --yes", "purpose": "Limpar cache descartavel"},

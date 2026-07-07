@@ -24,7 +24,7 @@ python -B -m pytest -p no:cacheprovider
 pytest --cov=. --cov-report=term-missing
 ```
 
-Na validacao atual, a suite chegou a 208 testes automatizados cobrindo core, CLI, configuracao, YAML, logs, relatorios, projetos, sessoes, modulos, plugins, utilitarios, erros, integracao, regressao, limpeza segura, Nmap, Nuclei, smart scan, baseline, instalador assistido, scripts auxiliares e smoke tests.
+Na validacao atual, a suite chegou a 210 testes automatizados cobrindo core, CLI, configuracao, YAML, logs, relatorios, projetos, sessoes, modulos, plugins, utilitarios, erros, integracao, regressao, limpeza segura, Nmap, Nuclei, smart scan, baseline, instalador assistido, scripts auxiliares e smoke tests.
 
 ## Estrutura
 

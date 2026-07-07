@@ -120,6 +120,47 @@ def test_cli_reports_generate_json(runtime_root, capsys):
     assert json.loads(captured.out)["format"] == "json"
 
 
+def test_cli_reports_generate_json_from_data_file(runtime_root, capsys):
+    data_file = runtime_root / "examples" / "manual_report.json"
+    data_file.write_text('{"status":"ok"}', encoding="utf-8")
+
+    exit_code, captured = run_cli(
+        capsys,
+        runtime_root,
+        "reports",
+        "generate",
+        "--title",
+        "Manual file",
+        "--format",
+        "json",
+        "--data-file",
+        str(data_file),
+    )
+
+    record = json.loads(captured.out)
+    assert exit_code == 0
+    assert record["format"] == "json"
+    assert (runtime_root / record["path"]).exists()
+
+
+def test_cli_reports_generate_missing_data_file_is_safe(runtime_root, capsys):
+    exit_code, captured = run_cli(
+        capsys,
+        runtime_root,
+        "reports",
+        "generate",
+        "--title",
+        "Missing file",
+        "--format",
+        "json",
+        "--data-file",
+        str(runtime_root / "examples" / "missing.json"),
+    )
+
+    assert exit_code == 1
+    assert "JSON file not found" in captured.err
+
+
 def test_cli_reports_generate_html(runtime_root, capsys):
     exit_code, captured = run_cli(
         capsys,
