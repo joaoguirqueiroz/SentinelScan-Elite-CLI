@@ -40,6 +40,24 @@ def test_nmap_module_reports_missing_tool(context, monkeypatch):
     assert "Nmap" in result.messages[0]
 
 
+def test_nmap_module_can_simulate_when_tool_is_missing(context, monkeypatch):
+    monkeypatch.setattr(context.scanner_service, "is_installed", lambda binary: False)
+
+    result = context.module_manager.execute(
+        "nmap_scan",
+        ModuleExecutionContext(
+            application=context,
+            parameters={"target": "127.0.0.1", "authorized": True, "simulate": True},
+        ),
+    )
+
+    assert result.success is True
+    assert result.status == "simulated"
+    assert result.data["execution"]["simulated"] is True
+    assert "Resultado simulado" in result.data["simulation_notice"]
+    assert all("\\nmap\\" in report["path"] or "/nmap/" in report["path"] for report in result.data["reports"])
+
+
 def test_nmap_module_success_generates_reports_and_history(context, monkeypatch):
     def fake_run(command, output_dir):
         return ScannerExecution(
@@ -87,7 +105,7 @@ def test_nuclei_module_requires_extra_confirmation_for_high_profile(context):
 
     assert result.success is True
     assert result.status == "cancelled"
-    assert "extra confirmation" in result.messages[0].lower()
+    assert "confirmacao extra" in result.messages[0].lower()
 
 
 def test_nuclei_module_success_generates_reports_and_history(context, monkeypatch):
@@ -133,6 +151,24 @@ def test_nuclei_module_success_generates_reports_and_history(context, monkeypatc
     assert any(record["function"] == "scanner.nuclei" for record in context.history_service.read_recent(10))
 
 
+def test_nuclei_module_can_simulate_when_tool_is_missing(context, monkeypatch):
+    monkeypatch.setattr(context.scanner_service, "is_installed", lambda binary: False)
+
+    result = context.module_manager.execute(
+        "nuclei_scan",
+        ModuleExecutionContext(
+            application=context,
+            parameters={"target": "http://localhost", "authorized": True, "simulate": True},
+        ),
+    )
+
+    assert result.success is True
+    assert result.status == "simulated"
+    assert result.data["execution"]["simulated"] is True
+    assert result.data["summary"]["findings"] == 1
+    assert "Resultado simulado" in result.data["simulation_notice"]
+
+
 def test_smart_scan_module_cancelled_without_authorization(context):
     result = context.module_manager.execute(
         "smart_scan",
@@ -158,7 +194,7 @@ def test_smart_scan_module_requires_extra_confirmation_for_advanced(context):
 
     assert result.success is True
     assert result.status == "cancelled"
-    assert "extra confirmation" in result.messages[0].lower()
+    assert "confirmacao extra" in result.messages[0].lower()
 
 
 def test_smart_scan_module_success_correlates_and_generates_reports(context, monkeypatch):
@@ -231,7 +267,29 @@ def test_smart_scan_module_success_correlates_and_generates_reports(context, mon
     assert result.data["correlation"]["findings"][0]["risk"] == "Critico"
     assert len(result.data["reports"]) == 4
     assert all(
-        "\\smart-scan\\" in report["path"] or "/smart-scan/" in report["path"]
+        "\\smart_scan\\" in report["path"] or "/smart_scan/" in report["path"]
         for report in result.data["reports"]
     )
     assert any(record["function"] == "scanner.smart" for record in context.history_service.read_recent(10))
+
+
+def test_smart_scan_module_simulates_missing_tools_and_keeps_web_scope(context, monkeypatch):
+    monkeypatch.setattr(context.scanner_service, "is_installed", lambda binary: False)
+
+    result = context.module_manager.execute(
+        "smart_scan",
+        ModuleExecutionContext(
+            application=context,
+            parameters={"target": "127.0.0.1", "authorized": True, "simulate": True},
+        ),
+    )
+
+    assert result.success is True
+    assert result.status == "completed"
+    assert result.data["nmap"]["executions"][0]["execution"]["simulated"] is True
+    assert result.data["nuclei"]["execution"]["execution"]["simulated"] is True
+    assert result.data["correlation"]["summary"]["web_endpoints"] >= 1
+    assert all(
+        "\\smart_scan\\" in report["path"] or "/smart_scan/" in report["path"]
+        for report in result.data["reports"]
+    )

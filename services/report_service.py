@@ -49,6 +49,7 @@ class ReportService:
         "csv": "csv",
         "html": "html",
     }
+    SIMPLE_TOOL_DIRS = {"nmap", "nuclei", "smart_scan", "smart-scan"}
 
     def __init__(
         self,
@@ -74,10 +75,15 @@ class ReportService:
     ) -> ReportRecord:
         if report_format not in self.SUPPORTED_FORMATS:
             raise ReportError(f"Unsupported report format '{report_format}'.")
+        stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
         report_id = f"report-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}-{uuid4().hex[:8]}"
         report_dir = self._target_dir(project_id, session_id, tool)
         extension = self.EXTENSIONS[report_format]
-        report_path = report_dir / f"{report_id}.{extension}"
+        if tool in self.SIMPLE_TOOL_DIRS:
+            report_name = f"{self._normalize_tool(tool)}_{stamp}.{extension}"
+        else:
+            report_name = f"{report_id}.{extension}"
+        report_path = report_dir / report_name
         payload = self._payload(report_id, title, results, project_id, session_id, template, tool)
         if report_format == "markdown":
             report_path.write_text(self._render_markdown(payload), encoding="utf-8")
@@ -124,12 +130,17 @@ class ReportService:
         return self._target_dir(project_id, session_id, tool)
 
     def _target_dir(self, project_id: str | None, session_id: str | None, tool: str | None = None) -> Path:
+        if tool in self.SIMPLE_TOOL_DIRS:
+            return ensure_dir(self.reports_dir / self._normalize_tool(tool))
         date_path = datetime.now(timezone.utc).strftime("%Y/%m/%d")
         session_path = session_id or "sessionless"
         root = self.reports_dir / (project_id or "global") / date_path / session_path
         if tool:
             root = root / tool
         return ensure_dir(root)
+
+    def _normalize_tool(self, tool: str) -> str:
+        return tool.replace("-", "_")
 
     def _payload(
         self,

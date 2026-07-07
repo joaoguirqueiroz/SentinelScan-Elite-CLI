@@ -64,6 +64,7 @@
 - Testes de setup, scripts e navegacao interativa adicionados.
 - Uso interno de `return_code` corrigido em todas as checagens do setup.
 - Comando `reports generate` ganhou `--data-file`, testes de regressao e documentacao para evitar falhas de citacao de JSON entre shells.
+- Modulos Nmap/Nuclei/Smart Scan ganharam comandos reais, `--simulate`, relatorios em pastas simples e validacao de arquivo de alvos do Nuclei.
 
 ## Funcoes que ainda precisam de melhoria
 
@@ -126,4 +127,4 @@ python main.py reports generate --title "Validacao funcional" --format json --da
 - Menu principal revisado opcao por opcao.
 - Submenus principais revisados.
 - Testes automatizados ampliados.
-- Ultima suite automatizada registrada nesta rodada: `210 passed`.
+- Ultima suite automatizada registrada nesta rodada: `224 passed`.

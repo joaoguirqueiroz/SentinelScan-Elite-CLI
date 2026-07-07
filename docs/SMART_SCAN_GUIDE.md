@@ -8,7 +8,7 @@ O Smart Scan combina descoberta Nmap, selecao de endpoints web e validacao Nucle
 
 1. Validar alvo ou lista de alvos.
 2. Exigir confirmacao de autorizacao.
-3. Executar Nmap com argumentos seguros.
+3. Executar Nmap com argumentos seguros e reais, salvando TXT e XML.
 4. Interpretar XML e extrair hosts, hostnames, SO, portas, servicos, produtos, versoes e tecnologias.
 5. Selecionar somente endpoints web candidatos.
 6. Executar Nuclei somente nos endpoints selecionados, quando instalado.
@@ -21,7 +21,22 @@ O Smart Scan combina descoberta Nmap, selecao de endpoints web e validacao Nucle
 ```bash
 python main.py scan smart 127.0.0.1 --authorize
 python main.py scan smart 192.168.1.10 --profile advanced --authorize --extra-confirm
+python main.py scan smart 127.0.0.1 --authorize --simulate
 ```
+
+Com `--simulate`, dados ficticios sao gerados somente quando Nmap ou Nuclei nao estiverem disponiveis. O relatorio marca claramente:
+
+```text
+Resultado simulado: estes dados sao ficticios e servem apenas para demonstracao da interface e dos relatorios.
+```
+
+## Relatorios
+
+```text
+reports/smart_scan/
+```
+
+Os relatorios incluem comando executado, alvo, data/hora, status, resultados do Nmap, endpoints web selecionados, achados Nuclei correlacionados, recomendacoes basicas e aviso de uso autorizado.
 
 ## Perfis
 

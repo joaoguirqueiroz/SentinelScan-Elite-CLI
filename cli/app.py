@@ -217,6 +217,7 @@ def _handle_scan(args: Any, context: Any, renderer: TerminalRenderer) -> None:
             "custom_flags": args.custom_flag,
             "authorized": args.authorize,
             "extra_confirmed": args.extra_confirm,
+            "simulate": args.simulate,
             "report_formats": args.formats,
         }
         result = context.module_manager.execute(
@@ -230,16 +231,22 @@ def _handle_scan(args: Any, context: Any, renderer: TerminalRenderer) -> None:
         )
         renderer.print_scan_result(result.to_dict())
     elif args.scan_command == "nuclei":
+        targets = list(args.target)
+        if args.target_file:
+            targets.extend(_read_lines_file(args.target_file))
         parameters = {
-            "targets": args.target,
+            "targets": targets,
             "profile": args.profile,
             "templates": args.template,
+            "tags": args.tag,
+            "severities": args.severity,
             "timeout": args.timeout,
             "concurrency": args.concurrency,
             "rate_limit": args.rate_limit,
             "max_targets": args.max_targets,
             "authorized": args.authorize,
             "extra_confirmed": args.extra_confirm,
+            "simulate": args.simulate,
             "report_formats": args.formats,
         }
         result = context.module_manager.execute(
@@ -271,6 +278,7 @@ def _handle_scan(args: Any, context: Any, renderer: TerminalRenderer) -> None:
             "baseline": args.baseline,
             "authorized": args.authorize,
             "extra_confirmed": args.extra_confirm,
+            "simulate": args.simulate,
             "report_formats": args.formats,
         }
         result = context.module_manager.execute(
@@ -459,7 +467,7 @@ def _guided_security_workflow(context: Any, renderer: TerminalRenderer, name: st
         ],
         "Scan Profile Manager": [
             "Perfis ativos: basic, intermediate, advanced e custom.",
-            "Advanced/custom exigem confirmacao extra e continuam sem evasao ou exploracao.",
+            "Avancado/custom exigem confirmacao extra e continuam sem evasao ou exploracao.",
             "A configuracao pode ser ajustada em config/sentinelscan.yaml.",
         ],
     }
@@ -624,14 +632,14 @@ def _interactive_nmap(context: Any, renderer: TerminalRenderer) -> None:
         "Analise com Nmap",
         [
             "Ferramenta para reconhecimento de rede autorizado.",
-            "Perfis: quick, basic, services, ports, custom.",
+            "Perfis: rapida, servicos, scripts-padrao, servicos-scripts, portas, custom.",
             "A execucao exige confirmacao de autorizacao.",
         ],
         style="cyan",
     )
     target = input("Alvo autorizado: ").strip()
-    profile = input("Perfil [basic]: ").strip() or "basic"
-    ports = input("Portas (apenas para perfil ports/custom, opcional): ").strip() or None
+    profile = input("Perfil [servicos-scripts]: ").strip() or "servicos-scripts"
+    ports = input("Portas (apenas para perfil portas/custom, opcional): ").strip() or None
     authorization = input("Confirmo que tenho autorizacao? [sim/nao]: ").strip()
     extra = "nao"
     if profile.lower() in {"custom", "personalizado"}:
@@ -657,8 +665,8 @@ def _interactive_nuclei(context: Any, renderer: TerminalRenderer) -> None:
         "Analise com Nuclei",
         [
             "Ferramenta para auditoria web autorizada com templates controlados.",
-            "Perfis: basic, technologies, exposure, low-medium, high, custom.",
-            "Perfis high/custom exigem confirmacao extra.",
+            "Perfis: basic, medium-high, high, critical, template, custom.",
+            "Perfis high/critical/template/custom exigem confirmacao extra.",
         ],
         style="cyan",
     )
@@ -667,7 +675,7 @@ def _interactive_nuclei(context: Any, renderer: TerminalRenderer) -> None:
     templates = input("Templates customizados separados por virgula (opcional): ").strip()
     authorization = input("Confirmo que tenho autorizacao? [sim/nao]: ").strip()
     extra = "nao"
-    if profile.lower() in {"high", "alta", "custom", "personalizado"}:
+    if profile.lower() in {"high", "alta", "critical", "critica", "template", "template-especifico", "custom", "personalizado"}:
         extra = input("Confirmacao extra para perfil avancado/personalizado? [sim/nao]: ").strip()
     result = context.module_manager.execute(
         "nuclei_scan",
@@ -803,6 +811,20 @@ def _read_json_file(path_value: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValidationError("Baseline data file must contain a JSON object.")
     return payload
+
+
+def _read_lines_file(path_value: str) -> list[str]:
+    path = Path(path_value)
+    if not path.exists():
+        raise ValidationError(f"Target file not found: {path_value}")
+    lines = [
+        line.strip()
+        for line in path.read_text(encoding="utf-8-sig").splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    if not lines:
+        raise ValidationError(f"Target file is empty: {path_value}")
+    return lines
 
 
 if __name__ == "__main__":

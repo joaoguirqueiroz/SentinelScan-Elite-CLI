@@ -8,8 +8,8 @@ Todas as mudancas relevantes do SentinelScan Elite CLI serao registradas neste a
 
 - Interface CLI mais organizada com paineis, ajuda integrada, menu interativo ampliado, barra de progresso e mensagens coloridas quando suportado pelo terminal.
 - Dashboard inicial em estilo cyber/hacker com logo ASCII, slogan, autor, status, usuario, sistema operacional, IP local, CPU, RAM e aviso etico.
-- Integracao do Nmap como modulo interno `nmap_scan`, com perfis `quick`, `basic`, `services`, `ports` e `custom`.
-- Integracao do Nuclei como modulo interno `nuclei_scan`, com perfis `basic`, `technologies`, `exposure`, `low-medium`, `high` e `custom`.
+- Integracao do Nmap como modulo interno `nmap_scan`, com perfis reais `rapida/quick`, `servicos/services`, `scripts-padrao`, `servicos-scripts`, `portas/ports` e `custom`.
+- Integracao do Nuclei como modulo interno `nuclei_scan`, com perfis reais `basic`, `technologies`, `exposure`, `low-medium`, `medium-high`, `high`, `critical`, `template` e `custom`.
 - Comandos `scan nmap` e `scan nuclei` com confirmacao obrigatoria de autorizacao e confirmacao extra para perfis avancados/personalizados.
 - Modulo `smart_scan` para correlacionar descoberta Nmap, endpoints web selecionados e achados Nuclei.
 - Comando `scan smart` com perfis `basic`, `intermediate`, `advanced` e `custom`.
@@ -18,8 +18,10 @@ Todas as mudancas relevantes do SentinelScan Elite CLI serao registradas neste a
 - Configuracao YAML segura em `config/sentinelscan.yaml` e exemplo em `config/sentinelscan.example.yaml`.
 - Suporte controlado a NSE do Nmap com perfis/scripts permitidos.
 - Filtros adicionais de Nuclei por tags, severidades, templates e diretorios de templates.
+- Opcao `--target-file` no Nuclei para montar comando real com `nuclei -l targets.txt`.
+- Modo `--simulate` para Nmap, Nuclei e Smart Scan quando ferramentas externas estiverem ausentes, sempre com resultado ficticio explicitamente marcado.
 - Exportacao de relatorios nos formatos Markdown, TXT, JSON, CSV e HTML.
-- Organizacao automatica de relatorios por projeto, data, sessao e ferramenta (`nmap`/`nuclei`).
+- Organizacao simples de relatorios de scanner em `reports/nmap/`, `reports/nuclei/` e `reports/smart_scan/`, com data e hora no nome.
 - Historico interno enriquecido com funcao executada, data/hora, resultado e erro tecnico quando houver.
 - Relatorio final da sessao no encerramento do modo interativo, incluindo tempo total, modulos usados, relatorios criados e erros encontrados.
 - Servico e comando de limpeza segura de temporarios, com simulacao por padrao e confirmacao explicita via `--yes`.
@@ -30,7 +32,7 @@ Todas as mudancas relevantes do SentinelScan Elite CLI serao registradas neste a
 - Submenu de configuracoes com `Verificar ambiente`, `Instalador assistido` e `Verificar Nmap/Nuclei`.
 - Documento `docs/FUNCTIONAL_AUDIT.md` com matriz funcional opcao por opcao.
 - Opcao `--data-file` em `reports generate` para gerar relatorios manuais a partir de arquivos JSON.
-- Suite ampliada para 210 testes automatizados, cobrindo os novos fluxos de CLI, YAML, relatorios, configuracao, historico, limpeza, Nmap, Nuclei, smart scan, baseline, instalador assistido, scripts e resumo de sessao.
+- Suite ampliada para 224 testes automatizados, cobrindo os novos fluxos de CLI, YAML, relatorios, configuracao, historico, limpeza, Nmap, Nuclei, smart scan, baseline, instalador assistido, scripts e resumo de sessao.
 - Arquivo `requirements.txt` raiz apontando para as dependencias de execucao.
 - Dependencia `rich` para experiencia visual profissional em terminais compativeis, com fallback ASCII.
 
@@ -39,6 +41,9 @@ Todas as mudancas relevantes do SentinelScan Elite CLI serao registradas neste a
 - Tratamento de erros da CLI com mensagens amigaveis ao usuario e detalhes tecnicos persistidos em logs e historico.
 - Tratamento de erros para Nmap/Nuclei ausentes, alvos invalidos, timeout, saida vazia, parsing XML/JSONL e templates/configuracoes invalidas.
 - Parser Nmap enriquecido com hostnames, IP, sistema operacional, produto, versao e tecnologias quando disponiveis no XML.
+- Nmap agora monta comandos praticos como `nmap -T4 -F TARGET`, `nmap -sV TARGET`, `nmap -sC TARGET`, `nmap -sV -sC TARGET` e `nmap -p PORTAS TARGET`.
+- Nuclei agora monta comandos praticos como `nuclei -u TARGET`, `nuclei -u TARGET -severity high`, `nuclei -u TARGET -severity critical`, `nuclei -u TARGET -severity medium,high`, `nuclei -u TARGET -t TEMPLATE` e `nuclei -l targets.txt`.
+- Smart Scan agora salva TXT/XML do Nmap, interpreta o XML, seleciona somente endpoints web e executa Nuclei apenas nesses endpoints.
 - Priorizacao de risco combinando severidade, endpoint correlacionado, servico, versao e evidencia.
 - README com secao completa "Como executar no Linux", comandos por distribuicao, primeira execucao, atualizacao, solucao de problemas, FAQ, desenvolvimento e licenca.
 - README com secoes dedicadas ao uso de Nmap e Nuclei no SentinelScan Elite CLI.

@@ -82,12 +82,31 @@ def build_parser() -> argparse.ArgumentParser:
 
     scan = subparsers.add_parser("scan", help="Run authorized scanner integrations.")
     scan_sub = scan.add_subparsers(dest="scan_command", required=True)
-    scan_nmap = scan_sub.add_parser("nmap", help="Run a controlled Nmap analysis.")
+    scan_nmap = scan_sub.add_parser("nmap", help="Executar analise Nmap controlada e autorizada.")
     scan_nmap.add_argument("target")
     scan_nmap.add_argument(
         "--profile",
         default="basic",
-        choices=["quick", "rapido", "basic", "basico", "services", "servicos", "ports", "portas", "custom", "personalizado"],
+        choices=[
+            "quick",
+            "rapido",
+            "rapida",
+            "varredura-rapida",
+            "basic",
+            "basico",
+            "services",
+            "servicos",
+            "deteccao-servicos",
+            "scripts",
+            "scripts-padrao",
+            "servicos-scripts",
+            "services-scripts",
+            "ports",
+            "portas",
+            "portas-especificas",
+            "custom",
+            "personalizado",
+        ],
     )
     scan_nmap.add_argument("--ports")
     scan_nmap.add_argument("--timeout", type=int)
@@ -97,9 +116,11 @@ def build_parser() -> argparse.ArgumentParser:
     scan_nmap.add_argument("--formats", default="txt,json,csv,html")
     scan_nmap.add_argument("--authorize", action="store_true")
     scan_nmap.add_argument("--extra-confirm", action="store_true")
+    scan_nmap.add_argument("--simulate", action="store_true", help="Gerar dados ficticios marcados se o Nmap estiver ausente.")
 
-    scan_nuclei = scan_sub.add_parser("nuclei", help="Run a controlled Nuclei audit.")
-    scan_nuclei.add_argument("target", nargs="+")
+    scan_nuclei = scan_sub.add_parser("nuclei", help="Executar auditoria Nuclei controlada e autorizada.")
+    scan_nuclei.add_argument("target", nargs="*")
+    scan_nuclei.add_argument("--target-file", help="Arquivo com um alvo autorizado por linha.")
     scan_nuclei.add_argument(
         "--profile",
         default="basic",
@@ -112,13 +133,24 @@ def build_parser() -> argparse.ArgumentParser:
             "exposicao",
             "low-medium",
             "baixa-media",
+            "medium-high",
+            "media-alta",
+            "medias-altas",
             "high",
             "alta",
+            "altas",
+            "critical",
+            "critica",
+            "criticas",
+            "template",
+            "template-especifico",
             "custom",
             "personalizado",
         ],
     )
     scan_nuclei.add_argument("--template", action="append", default=[])
+    scan_nuclei.add_argument("--tag", action="append", default=[])
+    scan_nuclei.add_argument("--severity", action="append", default=[])
     scan_nuclei.add_argument("--timeout", type=int)
     scan_nuclei.add_argument("--concurrency", type=int)
     scan_nuclei.add_argument("--rate-limit", type=int)
@@ -128,8 +160,9 @@ def build_parser() -> argparse.ArgumentParser:
     scan_nuclei.add_argument("--formats", default="txt,json,csv,html")
     scan_nuclei.add_argument("--authorize", action="store_true")
     scan_nuclei.add_argument("--extra-confirm", action="store_true")
+    scan_nuclei.add_argument("--simulate", action="store_true", help="Gerar dados ficticios marcados se o Nuclei estiver ausente.")
 
-    scan_smart = scan_sub.add_parser("smart", help="Run Nmap discovery and targeted Nuclei correlation.")
+    scan_smart = scan_sub.add_parser("smart", help="Executar Nmap, selecionar endpoints web e correlacionar Nuclei.")
     scan_smart.add_argument("target", nargs="+")
     scan_smart.add_argument(
         "--profile",
@@ -154,6 +187,7 @@ def build_parser() -> argparse.ArgumentParser:
     scan_smart.add_argument("--formats", default="txt,json,csv,html")
     scan_smart.add_argument("--authorize", action="store_true")
     scan_smart.add_argument("--extra-confirm", action="store_true")
+    scan_smart.add_argument("--simulate", action="store_true", help="Gerar dados ficticios marcados se Nmap/Nuclei estiverem ausentes.")
 
     baseline = subparsers.add_parser("baseline", help="Create and compare defensive exposure baselines.")
     baseline_sub = baseline.add_subparsers(dest="baseline_command", required=True)

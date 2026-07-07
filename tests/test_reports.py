@@ -81,6 +81,8 @@ def test_report_service_organizes_tool_reports(runtime_root, context):
     )
 
     assert "nmap" in record.path
+    assert record.path.startswith("reports\\nmap\\") or record.path.startswith("reports/nmap/")
+    assert "nmap_" in record.path
     assert (runtime_root / record.path).exists()
 
 

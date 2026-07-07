@@ -63,29 +63,46 @@ python main.py modules run asset_inventory --param input_file=examples/assets.js
 
 ```bash
 python main.py scan nmap 127.0.0.1 --authorize
-python main.py scan nmap 127.0.0.1 --profile ports --ports 80,443 --authorize
+python main.py scan nmap 127.0.0.1 --profile rapida --authorize
+python main.py scan nmap 127.0.0.1 --profile servicos --authorize
+python main.py scan nmap 127.0.0.1 --profile scripts-padrao --authorize
+python main.py scan nmap 127.0.0.1 --profile servicos-scripts --authorize
+python main.py scan nmap 127.0.0.1 --profile portas --ports 80,443 --authorize
 python main.py scan nuclei http://localhost --authorize
+python main.py scan nuclei http://localhost --profile medium-high --authorize
 python main.py scan nuclei http://localhost --profile high --authorize --extra-confirm
+python main.py scan nuclei http://localhost --profile critical --authorize --extra-confirm
+python main.py scan nuclei http://localhost --profile template --template exposures/ --authorize --extra-confirm
+python main.py scan nuclei --target-file targets.txt --authorize
 python main.py scan smart 127.0.0.1 --authorize
 python main.py scan smart 127.0.0.1 --profile advanced --authorize --extra-confirm
 ```
 
-Sem `--authorize`, a execucao e cancelada. Perfis personalizados e de alto impacto exigem `--extra-confirm`.
+Sem `--authorize`, a execucao e cancelada com mensagem clara. Perfis personalizados e de alto impacto exigem `--extra-confirm`.
+
+Quando Nmap ou Nuclei nao estiverem instalados, use `--simulate` para gerar dados ficticios claramente marcados:
+
+```bash
+python main.py scan nmap 127.0.0.1 --authorize --simulate
+python main.py scan nuclei http://localhost --authorize --simulate
+python main.py scan smart 127.0.0.1 --authorize --simulate
+```
 
 ## Smart scan
 
-O smart scan usa Nmap para identificar portas/servicos, seleciona endpoints web relevantes e roda Nuclei apenas nesses endpoints, quando a ferramenta estiver instalada.
+O smart scan usa Nmap para identificar portas/servicos, salva TXT/XML, interpreta o XML, seleciona endpoints web relevantes e roda Nuclei apenas nesses endpoints, quando a ferramenta estiver instalada.
 
 ```bash
 python main.py scan smart 127.0.0.1 --authorize
 python main.py scan smart 192.168.1.10 --profile intermediate --authorize
 python main.py scan smart 192.168.1.10 --profile custom --ports 80,443 --tag tech --severity high --authorize --extra-confirm
+python main.py scan smart 127.0.0.1 --authorize --simulate
 ```
 
 Os resultados ficam em:
 
 ```text
-reports/<projeto-ou-global>/<ano>/<mes>/<dia>/<sessao-ou-sessionless>/smart-scan/
+reports/smart_scan/
 ```
 
 ## Baseline defensivo
@@ -131,7 +148,9 @@ Para uso recorrente, `--data-file` evita diferencas de citacao entre shells.
 Relatorios de ferramentas ficam em:
 
 ```text
-reports/<projeto-ou-global>/<ano>/<mes>/<dia>/<sessao-ou-sessionless>/<nmap-ou-nuclei>/
+reports/nmap/
+reports/nuclei/
+reports/smart_scan/
 ```
 
 ## Consultar auditoria

@@ -7,6 +7,7 @@ from typing import Any
 from core.exceptions import ValidationError
 from core.module import BaseModule, ModuleExecutionContext, ModuleMetadata, ModuleResult
 from services.scanner_service import (
+    AUTHORIZATION_BLOCK_MESSAGE,
     AUTHORIZED_USE_NOTICE,
     ETHICAL_NOTICE,
     ScannerError,
@@ -32,10 +33,10 @@ PROFILE_ALIASES = {
 class SmartScanModule(BaseModule):
     metadata = ModuleMetadata(
         id="smart_scan",
-        name="Smart Nmap + Nuclei Scan",
+        name="Smart Scan Nmap + Nuclei",
         version="1.0.0",
         author="Joao Guilherme",
-        description="Correlates authorized Nmap discovery with targeted Nuclei validation.",
+        description="Correlaciona descoberta Nmap autorizada com validacao Nuclei direcionada.",
         category="authorized-scanning",
     )
 
@@ -66,7 +67,7 @@ class SmartScanModule(BaseModule):
         targets = _targets(parameters)
         profile = _profile(parameters.get("profile"))
         if not _truthy(parameters.get("authorized")):
-            return self._cancelled(app, targets, profile, "Authorization was not confirmed.")
+            return self._cancelled(app, targets, profile, AUTHORIZATION_BLOCK_MESSAGE)
         large_threshold = int(
             app.settings.get("scanners", {}).get("smart", {}).get("large_target_threshold", 10)
         )
@@ -77,10 +78,10 @@ class SmartScanModule(BaseModule):
                 app,
                 targets,
                 profile,
-                "Advanced, custom, or large target lists require extra confirmation.",
+                "Perfil avancado, personalizado ou lista grande exige confirmacao extra.",
             )
 
-        output_dir = app.report_service.tool_output_dir(context.project_id, context.session_id, "smart-scan")
+        output_dir = app.report_service.tool_output_dir(context.project_id, context.session_id, "smart_scan")
         all_hosts: list[dict[str, Any]] = []
         nmap_executions: list[dict[str, Any]] = []
         decisions: list[str] = []
@@ -98,7 +99,13 @@ class SmartScanModule(BaseModule):
                     nse_scripts=_list_value(parameters.get("nse_scripts")),
                     timeout=parameters.get("timeout"),
                 )
-                nmap_result = scanner.run_nmap(nmap_command, output_dir)
+                try:
+                    nmap_result = scanner.run_nmap(nmap_command, output_dir)
+                except ScannerToolUnavailable:
+                    if not _truthy(parameters.get("simulate")):
+                        raise
+                    nmap_result = scanner.simulate_nmap(nmap_command, output_dir, target)
+                    decisions.append(_simulation_notice())
                 nmap_payload = nmap_result.to_dict()
                 nmap_executions.append({"command": nmap_command.to_dict(), "execution": nmap_payload})
                 all_hosts.extend(nmap_payload.get("parsed", {}).get("hosts", []))
@@ -125,8 +132,33 @@ class SmartScanModule(BaseModule):
                     "execution": nuclei_result.to_dict(),
                 }
                 nuclei_findings = nuclei_result.parsed.get("findings", [])
+            elif endpoints and _truthy(parameters.get("simulate")):
+                nuclei_command = scanner.build_nuclei_command(
+                    targets=[endpoint["url"] for endpoint in endpoints],
+                    output_dir=output_dir,
+                    profile=_nuclei_profile(profile),
+                    templates=_list_value(parameters.get("templates")),
+                    template_dirs=_list_value(parameters.get("template_dirs")),
+                    tags=_list_value(parameters.get("tags")),
+                    severities=_list_value(parameters.get("severities")),
+                    timeout=parameters.get("timeout"),
+                    concurrency=parameters.get("concurrency"),
+                    rate_limit=parameters.get("rate_limit"),
+                    max_targets=parameters.get("max_targets"),
+                )
+                nuclei_result = scanner.simulate_nuclei(
+                    nuclei_command,
+                    output_dir,
+                    [endpoint["url"] for endpoint in endpoints],
+                )
+                nuclei_execution = {
+                    "command": nuclei_command.to_dict(),
+                    "execution": nuclei_result.to_dict(),
+                }
+                nuclei_findings = nuclei_result.parsed.get("findings", [])
+                decisions.append(_simulation_notice())
             elif endpoints:
-                decisions.append("Nuclei nao instalado; fluxo concluido com dados Nmap e endpoints priorizados.")
+                decisions.append("Nuclei nao instalado; use --simulate para demonstrar a validacao sem ferramenta real.")
             else:
                 decisions.append("Nenhum endpoint web candidato foi encontrado; Nuclei nao foi executado.")
 
@@ -137,6 +169,7 @@ class SmartScanModule(BaseModule):
                 "profile": profile,
                 "authorized_notice": AUTHORIZED_USE_NOTICE,
                 "ethical_notice": ETHICAL_NOTICE,
+                "progress": _progress_steps(),
                 "nmap": {"executions": nmap_executions, "hosts": all_hosts},
                 "nuclei": {"execution": nuclei_execution, "findings": nuclei_findings},
                 "correlation": correlation,
@@ -158,10 +191,10 @@ class SmartScanModule(BaseModule):
                 "completed",
                 payload,
                 [
-                    "Smart scan completed.",
+                    "Smart Scan concluido.",
                     f"Hosts: {correlation['summary']['hosts']}",
                     f"Endpoints web: {correlation['summary']['web_endpoints']}",
-                    f"Findings: {correlation['summary']['findings']}",
+                    f"Achados: {correlation['summary']['findings']}",
                 ],
             )
         except ScannerToolUnavailable as exc:
@@ -181,12 +214,12 @@ class SmartScanModule(BaseModule):
         reports: list[dict[str, Any]] = []
         for report_format in _report_formats(context.parameters.get("report_formats")):
             record = app.report_service.generate_report(
-                title="Smart Authorized Exposure Scan",
+                title="Smart Scan autorizado",
                 results={"success": True, "status": "completed", "data": payload},
                 project_id=context.project_id,
                 session_id=context.session_id,
                 report_format=report_format,
-                tool="smart-scan",
+                tool="smart_scan",
             )
             reports.append(record.to_dict())
         return reports
@@ -201,12 +234,18 @@ class SmartScanModule(BaseModule):
             "reason": reason,
         }
         self._history(app, "cancelled", payload)
-        return self.result(True, "cancelled", payload, [reason, "Nmap and Nuclei were not executed."])
+        return self.result(True, "cancelled", payload, [reason, "Nmap e Nuclei nao foram executados."])
 
     def _failure(
         self, app: Any, status: str, targets: list[str], profile: str, exc: Exception
     ) -> ModuleResult:
-        payload = {"tool": "smart_scan", "targets": targets, "profile": profile, "error": str(exc)}
+        payload = {
+            "tool": "smart_scan",
+            "targets": targets,
+            "profile": profile,
+            "error": str(exc),
+            "simulation": "Use --simulate para gerar dados ficticios marcados como simulacao.",
+        }
         if app.log_service:
             app.log_service.record_event(
                 component="smart_scan",
@@ -215,7 +254,7 @@ class SmartScanModule(BaseModule):
                 details=payload,
             )
         self._history(app, "error", payload, str(exc))
-        return self.result(False, status, payload, [str(exc), "Technical details were saved to logs."])
+        return self.result(False, status, payload, [str(exc), "Detalhes tecnicos foram salvos nos logs."])
 
     def _history(
         self, app: Any, result: str, details: dict[str, Any], error: str | None = None
@@ -237,7 +276,7 @@ def _profile(value: Any) -> str:
 
 
 def _nmap_profile(profile: str) -> str:
-    return "custom" if profile == "custom" else "services"
+    return "custom" if profile == "custom" else "services-scripts"
 
 
 def _nuclei_profile(profile: str) -> str:
@@ -289,6 +328,29 @@ def _report_formats(value: Any) -> list[str]:
     if invalid:
         raise ValidationError(f"Unsupported report format: {invalid[0]}")
     return formats
+
+
+def _progress_steps() -> list[str]:
+    return [
+        "Validando alvo",
+        "Verificando autorizacao",
+        "Verificando Nmap",
+        "Preparando comando Nmap",
+        "Executando Nmap",
+        "Interpretando XML do Nmap",
+        "Identificando servicos web",
+        "Executando Nuclei apenas em endpoints web",
+        "Correlacionando resultados",
+        "Gerando relatorio",
+        "Finalizado",
+    ]
+
+
+def _simulation_notice() -> str:
+    return (
+        "Resultado simulado: estes dados sao ficticios e servem apenas para "
+        "demonstracao da interface e dos relatorios."
+    )
 
 
 MODULE_CLASS = SmartScanModule

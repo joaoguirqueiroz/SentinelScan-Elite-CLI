@@ -79,6 +79,31 @@ def test_scanner_service_builds_safe_nmap_command(runtime_root):
     assert "80,443" in command.args
     assert command.profile == "ports"
     assert command.output_files["xml"].endswith(".xml")
+    assert "nmap_" in command.output_files["xml"]
+
+
+@pytest.mark.parametrize(
+    ("profile", "expected_flags"),
+    [
+        ("quick", ["-T4", "-F"]),
+        ("servicos", ["-sV"]),
+        ("scripts-padrao", ["-sC"]),
+        ("servicos-scripts", ["-sV", "-sC"]),
+    ],
+)
+def test_scanner_service_builds_real_nmap_profiles(runtime_root, profile, expected_flags):
+    service = ScannerService(runtime_root)
+
+    command = service.build_nmap_command(
+        "127.0.0.1",
+        runtime_root / "reports" / "nmap",
+        profile=profile,
+    )
+
+    for flag in expected_flags:
+        assert flag in command.args
+    assert "-oN" in command.args
+    assert "-oX" in command.args
 
 
 def test_scanner_service_rejects_unsafe_nmap_custom_flag(runtime_root):
@@ -110,6 +135,40 @@ def test_scanner_service_builds_safe_nuclei_command(runtime_root):
     assert "-severity" in command.args
     assert "low,medium" in command.args
     assert command.output_files["jsonl"].endswith(".jsonl")
+    assert "nuclei_" in command.output_files["jsonl"]
+
+
+@pytest.mark.parametrize(
+    ("profile", "expected_value"),
+    [
+        ("critical", "critical"),
+        ("high", "high"),
+        ("medium-high", "medium,high"),
+    ],
+)
+def test_scanner_service_builds_real_nuclei_severity_profiles(runtime_root, profile, expected_value):
+    service = ScannerService(runtime_root)
+
+    command = service.build_nuclei_command(
+        ["http://localhost"],
+        runtime_root / "reports" / "nuclei",
+        profile=profile,
+    )
+
+    assert "-severity" in command.args
+    assert expected_value in command.args
+
+
+def test_scanner_service_uses_nuclei_target_list_file(runtime_root):
+    service = ScannerService(runtime_root)
+
+    command = service.build_nuclei_command(
+        ["http://localhost", "http://127.0.0.1"],
+        runtime_root / "reports" / "nuclei",
+    )
+
+    assert "-l" in command.args
+    assert "nuclei-targets.txt" in command.args[command.args.index("-l") + 1]
 
 
 def test_scanner_service_parse_nmap_xml(runtime_root):
@@ -228,6 +287,24 @@ def test_scanner_service_run_nuclei_uses_no_shell(runtime_root, monkeypatch):
     execution = service.run_nuclei(command, runtime_root / "reports" / "nuclei")
 
     assert execution.parsed["findings"][0]["name"] == "Test Finding"
+
+
+def test_scanner_service_generates_marked_simulated_outputs(runtime_root):
+    service = ScannerService(runtime_root)
+    nmap_command = service.build_nmap_command("127.0.0.1", runtime_root / "reports" / "nmap")
+    nuclei_command = service.build_nuclei_command(["http://localhost"], runtime_root / "reports" / "nuclei")
+
+    nmap_execution = service.simulate_nmap(nmap_command, runtime_root / "reports" / "nmap", "127.0.0.1")
+    nuclei_execution = service.simulate_nuclei(
+        nuclei_command,
+        runtime_root / "reports" / "nuclei",
+        ["http://localhost"],
+    )
+
+    assert nmap_execution.simulated is True
+    assert nuclei_execution.simulated is True
+    assert "Resultado simulado" in (runtime_root / nmap_execution.output_files["txt"]).read_text(encoding="utf-8")
+    assert nuclei_execution.parsed["findings"][0]["template"] == "simulated-authorized-demo"
 
 
 def test_scanner_service_missing_tools_and_timeout(runtime_root, monkeypatch):

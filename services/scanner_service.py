@@ -24,6 +24,11 @@ AUTHORIZED_USE_NOTICE = (
     "ou ativos autorizados."
 )
 
+AUTHORIZATION_BLOCK_MESSAGE = (
+    "Execucao bloqueada. Use --authorize somente se voce possui autorizacao "
+    "para analisar este alvo."
+)
+
 ETHICAL_NOTICE = (
     "Use esta ferramenta apenas em redes, sistemas, sites e APIs proprios, autorizados "
     "ou ambientes de laboratorio. O uso contra terceiros sem autorizacao e proibido."
@@ -75,6 +80,7 @@ class ScannerExecution:
     return_code: int
     output_files: dict[str, str]
     parsed: dict[str, Any] = field(default_factory=dict)
+    simulated: bool = False
     started_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     finished_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -88,16 +94,71 @@ class ScannerService:
     NMAP_PROFILE_ALIASES = {
         "quick": "quick",
         "rapido": "quick",
+        "rapida": "quick",
+        "varredura-rapida": "quick",
         "basic": "basic",
         "basico": "basic",
         "services": "services",
         "servicos": "services",
+        "deteccao-servicos": "services",
+        "scripts": "scripts",
+        "scripts-padrao": "scripts",
+        "scripts_padrao": "scripts",
+        "servicos-scripts": "services-scripts",
+        "servicos_scripts": "services-scripts",
+        "services-scripts": "services-scripts",
+        "services_scripts": "services-scripts",
         "ports": "ports",
         "portas": "ports",
+        "portas-especificas": "ports",
         "custom": "custom",
         "personalizado": "custom",
     }
-    NMAP_CUSTOM_FLAGS = {"-sV", "--version-light", "-Pn", "-F"}
+    NMAP_PROFILE_INFO = {
+        "quick": {
+            "name": "Varredura rapida",
+            "description": "Executa uma varredura rapida nas portas mais comuns usando nmap -T4 -F.",
+            "when_to_use": "Use para uma primeira triagem autorizada e rapida.",
+            "base_command": "nmap -T4 -F TARGET",
+        },
+        "basic": {
+            "name": "Servicos e scripts",
+            "description": "Identifica servicos/versoes e executa scripts padrao usando nmap -sV -sC.",
+            "when_to_use": "Use como perfil padrao para inventario autorizado equilibrado.",
+            "base_command": "nmap -sV -sC TARGET",
+        },
+        "services": {
+            "name": "Deteccao de servicos",
+            "description": "Identifica quais servicos e versoes estao nas portas abertas usando nmap -sV.",
+            "when_to_use": "Use quando precisar de inventario de servicos sem scripts NSE.",
+            "base_command": "nmap -sV TARGET",
+        },
+        "scripts": {
+            "name": "Scripts padrao",
+            "description": "Executa scripts padrao seguros do Nmap usando nmap -sC.",
+            "when_to_use": "Use apos confirmar que scripts padrao estao dentro do escopo autorizado.",
+            "base_command": "nmap -sC TARGET",
+        },
+        "services-scripts": {
+            "name": "Servicos e scripts",
+            "description": "Combina deteccao de servicos e scripts padrao usando nmap -sV -sC.",
+            "when_to_use": "Use para uma visao mais completa de servicos autorizados.",
+            "base_command": "nmap -sV -sC TARGET",
+        },
+        "ports": {
+            "name": "Portas especificas",
+            "description": "Analisa apenas as portas informadas usando nmap -p PORTAS.",
+            "when_to_use": "Use quando o escopo autoriza somente portas especificas.",
+            "base_command": "nmap -p PORTAS TARGET",
+        },
+        "custom": {
+            "name": "Perfil personalizado",
+            "description": "Executa somente flags personalizadas permitidas pela politica local.",
+            "when_to_use": "Use apenas com confirmacao extra e escopo documentado.",
+            "base_command": "nmap FLAGS_PERMITIDAS TARGET",
+        },
+    }
+    NMAP_CUSTOM_FLAGS = {"-sV", "-sC", "--version-light", "-Pn", "-F", "-T4"}
     NMAP_NSE_PROFILE_SCRIPTS = {
         "default-safe": ["default", "safe"],
         "discovery": ["discovery"],
@@ -108,16 +169,83 @@ class ScannerService:
     NUCLEI_PROFILE_ALIASES = {
         "basic": "basic",
         "basico": "basic",
+        "analise-basica": "basic",
         "technologies": "technologies",
         "tecnologias": "technologies",
         "exposure": "exposure",
         "exposicao": "exposure",
         "low-medium": "low-medium",
         "baixa-media": "low-medium",
+        "medium-high": "medium-high",
+        "media-alta": "medium-high",
+        "medias-altas": "medium-high",
         "high": "high",
         "alta": "high",
+        "altas": "high",
+        "critical": "critical",
+        "critica": "critical",
+        "criticas": "critical",
+        "template": "template",
+        "template-especifico": "template",
+        "template_especifico": "template",
         "custom": "custom",
         "personalizado": "custom",
+    }
+    NUCLEI_PROFILE_INFO = {
+        "basic": {
+            "name": "Analise basica",
+            "description": "Executa o Nuclei contra o alvo informado usando nuclei -u TARGET.",
+            "when_to_use": "Use para uma validacao inicial autorizada.",
+            "base_command": "nuclei -u TARGET",
+        },
+        "technologies": {
+            "name": "Tecnologias detectadas",
+            "description": "Usa templates com tag tech para identificar tecnologias.",
+            "when_to_use": "Use para complementar inventario web autorizado.",
+            "base_command": "nuclei -u TARGET -tags tech",
+        },
+        "exposure": {
+            "name": "Exposicoes comuns",
+            "description": "Procura exposicoes e configuracoes comuns com tags controladas.",
+            "when_to_use": "Use para revisar exposicoes conhecidas em ativos proprios.",
+            "base_command": "nuclei -u TARGET -tags exposure,misconfig",
+        },
+        "low-medium": {
+            "name": "Vulnerabilidades baixas e medias",
+            "description": "Filtra achados de severidade baixa e media.",
+            "when_to_use": "Use para revisao de melhoria continua.",
+            "base_command": "nuclei -u TARGET -severity low,medium",
+        },
+        "medium-high": {
+            "name": "Vulnerabilidades medias e altas",
+            "description": "Filtra achados de severidade media e alta.",
+            "when_to_use": "Use para priorizar riscos relevantes sem criticos.",
+            "base_command": "nuclei -u TARGET -severity medium,high",
+        },
+        "high": {
+            "name": "Vulnerabilidades altas",
+            "description": "Procura apenas achados classificados como severidade alta.",
+            "when_to_use": "Use com confirmacao extra em escopo autorizado.",
+            "base_command": "nuclei -u TARGET -severity high",
+        },
+        "critical": {
+            "name": "Vulnerabilidades criticas",
+            "description": "Procura apenas achados classificados como severidade critica.",
+            "when_to_use": "Use com confirmacao extra e janela autorizada.",
+            "base_command": "nuclei -u TARGET -severity critical",
+        },
+        "template": {
+            "name": "Usar template especifico",
+            "description": "Executa um template ou caminho de templates informado com -t.",
+            "when_to_use": "Use para validar um controle especifico autorizado.",
+            "base_command": "nuclei -u TARGET -t CAMINHO_DO_TEMPLATE",
+        },
+        "custom": {
+            "name": "Perfil personalizado",
+            "description": "Executa templates, tags e severidades explicitamente definidos.",
+            "when_to_use": "Use apenas com confirmacao extra e escopo documentado.",
+            "base_command": "nuclei -u TARGET OPCOES_PERMITIDAS",
+        },
     }
     NUCLEI_SEVERITIES = {"info", "low", "medium", "high", "critical"}
 
@@ -142,6 +270,14 @@ class ScannerService:
 
     def normalize_nuclei_profile(self, value: str | None) -> str:
         return self._normalize_profile(value or "basic", self.NUCLEI_PROFILE_ALIASES, "Nuclei profile")
+
+    def nmap_profile_info(self, profile: str | None) -> dict[str, str]:
+        selected = self.normalize_nmap_profile(profile)
+        return dict(self.NMAP_PROFILE_INFO[selected])
+
+    def nuclei_profile_info(self, profile: str | None) -> dict[str, str]:
+        selected = self.normalize_nuclei_profile(profile)
+        return dict(self.NUCLEI_PROFILE_INFO[selected])
 
     def validate_nmap_target(self, target: str) -> str:
         clean = self._clean_value(target, "target")
@@ -192,22 +328,27 @@ class ScannerService:
         selected_target = self.validate_nmap_target(target)
         selected_timeout = self._positive_int(timeout, self.default_limits()["timeout"], "timeout")
         output_paths = self.nmap_output_paths(output_dir)
-        args = ["nmap", "-oX", str(output_paths["xml"]), "-oN", str(output_paths["txt"])]
+        args = ["nmap"]
         if selected_profile == "quick":
-            args.extend(["-T2", "-F"])
+            args.extend(["-T4", "-F"])
         elif selected_profile == "basic":
-            args.extend(["-T2"])
+            args.extend(["-sV", "-sC"])
         elif selected_profile == "services":
-            args.extend(["-T2", "-sV", "--version-light"])
+            args.extend(["-sV"])
+        elif selected_profile == "scripts":
+            args.extend(["-sC"])
+        elif selected_profile == "services-scripts":
+            args.extend(["-sV", "-sC"])
         elif selected_profile == "ports":
             clean_ports = self.validate_ports(ports)
-            args.extend(["-T2", "-p", clean_ports])
+            args.extend(["-p", clean_ports])
         elif selected_profile == "custom":
-            args.extend(["-T2", *self.validate_custom_nmap_flags(custom_flags or [])])
+            args.extend(self.validate_custom_nmap_flags(custom_flags or []))
             if ports:
                 args.extend(["-p", self.validate_ports(ports)])
         script_args = self.build_nse_script_args(nse_profile, nse_scripts)
         args.extend(script_args)
+        args.extend(["-oN", str(output_paths["txt"]), "-oX", str(output_paths["xml"])])
         args.append(selected_target)
         return ScannerCommand(
             "nmap",
@@ -240,28 +381,20 @@ class ScannerService:
         selected_rate = self._bounded_int(rate_limit, limits["rate_limit"], "rate_limit", maximum=500)
         selected_targets = self.validate_nuclei_targets(targets, max_targets or limits["max_targets"])
         output_path = self.nuclei_output_path(output_dir)
-        args = [
-            "nuclei",
-            "-jsonl",
-            "-silent",
-            "-timeout",
-            str(selected_timeout),
-            "-c",
-            str(selected_concurrency),
-            "-rate-limit",
-            str(selected_rate),
-            "-o",
-            str(output_path),
-        ]
+        args = ["nuclei"]
         if selected_profile == "technologies":
             args.extend(["-tags", "tech"])
         elif selected_profile == "exposure":
             args.extend(["-tags", "exposure,misconfig"])
         elif selected_profile == "low-medium":
             args.extend(["-severity", "low,medium"])
+        elif selected_profile == "medium-high":
+            args.extend(["-severity", "medium,high"])
         elif selected_profile == "high":
-            args.extend(["-severity", "high,critical"])
-        elif selected_profile == "custom":
+            args.extend(["-severity", "high"])
+        elif selected_profile == "critical":
+            args.extend(["-severity", "critical"])
+        elif selected_profile in {"template", "custom"}:
             args.extend(self.validate_nuclei_templates(templates or []))
         if template_dirs:
             args.extend(self.validate_nuclei_templates(template_dirs))
@@ -275,7 +408,21 @@ class ScannerService:
             args.extend(["-u", selected_targets[0]])
         else:
             target_file = self._write_target_file(output_dir, selected_targets)
-            args.extend(["-list", str(target_file)])
+            args.extend(["-l", str(target_file)])
+        args.extend(
+            [
+                "-jsonl",
+                "-silent",
+                "-timeout",
+                str(selected_timeout),
+                "-c",
+                str(selected_concurrency),
+                "-rate-limit",
+                str(selected_rate),
+                "-o",
+                str(output_path),
+            ]
+        )
         return ScannerCommand(
             "nuclei",
             args,
@@ -286,7 +433,10 @@ class ScannerService:
 
     def run_nmap(self, command: ScannerCommand, output_dir: Path) -> ScannerExecution:
         if not self.is_installed("nmap"):
-            raise ScannerToolUnavailable("Nmap nao instalado. Instale com sudo apt install -y nmap.")
+            raise ScannerToolUnavailable(
+                "Nmap nao encontrado no sistema. Instale com sudo apt install -y nmap, "
+                "sudo dnf install -y nmap ou sudo pacman -S nmap."
+            )
         ensure_dir(output_dir)
         started_at = datetime.now(timezone.utc).isoformat()
         try:
@@ -298,7 +448,9 @@ class ScannerService:
                 shell=False,
             )
         except subprocess.TimeoutExpired as exc:
-            raise ScannerTimeoutError("Nmap timed out.") from exc
+            raise ScannerTimeoutError(
+                "A execucao demorou mais que o esperado e foi encerrada com seguranca."
+            ) from exc
         output_paths = {key: Path(value) for key, value in command.output_files.items()}
         if not output_paths["txt"].exists():
             output_paths["txt"].write_text(completed.stdout or completed.stderr or "", encoding="utf-8")
@@ -320,7 +472,10 @@ class ScannerService:
 
     def run_nuclei(self, command: ScannerCommand, output_dir: Path) -> ScannerExecution:
         if not self.is_installed("nuclei"):
-            raise ScannerToolUnavailable("Nuclei nao instalado. Consulte o README para instalar.")
+            raise ScannerToolUnavailable(
+                "Nuclei nao encontrado no sistema. Consulte o README para instalar com Go "
+                "ou pelo metodo recomendado da sua distribuicao."
+            )
         ensure_dir(output_dir)
         started_at = datetime.now(timezone.utc).isoformat()
         try:
@@ -332,7 +487,9 @@ class ScannerService:
                 shell=False,
             )
         except subprocess.TimeoutExpired as exc:
-            raise ScannerTimeoutError("Nuclei timed out.") from exc
+            raise ScannerTimeoutError(
+                "A execucao demorou mais que o esperado e foi encerrada com seguranca."
+            ) from exc
         output_path = Path(command.output_files["jsonl"])
         if not output_path.exists():
             output_path.write_text(completed.stdout or "", encoding="utf-8")
@@ -348,6 +505,70 @@ class ScannerService:
             parsed={"findings": findings},
             started_at=started_at,
             finished_at=datetime.now(timezone.utc).isoformat(),
+        )
+
+    def simulate_nmap(self, command: ScannerCommand, output_dir: Path, target: str) -> ScannerExecution:
+        ensure_dir(output_dir)
+        output_paths = {key: Path(value) for key, value in command.output_files.items()}
+        host = self.validate_nmap_target(target)
+        xml = _simulated_nmap_xml(host)
+        txt = (
+            "Resultado simulado: estes dados sao ficticios e servem apenas para "
+            "demonstracao da interface e dos relatorios.\n"
+            f"Alvo: {host}\n"
+            "Portas abertas simuladas: 80/tcp http, 443/tcp https\n"
+        )
+        output_paths["xml"].write_text(xml, encoding="utf-8")
+        output_paths["txt"].write_text(txt, encoding="utf-8")
+        parsed = self.parse_nmap_xml(xml)
+        return ScannerExecution(
+            tool="nmap",
+            profile=command.profile,
+            command=command.args,
+            return_code=0,
+            output_files={key: str(path) for key, path in output_paths.items()},
+            parsed={"hosts": parsed},
+            simulated=True,
+        )
+
+    def simulate_nuclei(
+        self, command: ScannerCommand, output_dir: Path, targets: list[str]
+    ) -> ScannerExecution:
+        ensure_dir(output_dir)
+        output_path = Path(command.output_files["jsonl"])
+        selected_targets = self.validate_nuclei_targets(targets)
+        lines = []
+        for target in selected_targets:
+            endpoint = target if target.startswith(("http://", "https://")) else f"http://{target}"
+            lines.append(
+                json.dumps(
+                    {
+                        "template-id": "simulated-authorized-demo",
+                        "host": endpoint,
+                        "matched-at": endpoint,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "info": {
+                            "name": "Resultado simulado de demonstracao",
+                            "severity": "info",
+                            "description": (
+                                "Resultado simulado: estes dados sao ficticios e servem apenas "
+                                "para demonstracao da interface e dos relatorios."
+                            ),
+                        },
+                    },
+                    ensure_ascii=False,
+                )
+            )
+        output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        findings = self.parse_nuclei_jsonl(output_path)
+        return ScannerExecution(
+            tool="nuclei",
+            profile=command.profile,
+            command=command.args,
+            return_code=0,
+            output_files={"jsonl": str(output_path)},
+            parsed={"findings": findings},
+            simulated=True,
         )
 
     def parse_nmap_xml(self, path_or_text: Path | str) -> list[dict[str, Any]]:
@@ -429,13 +650,13 @@ class ScannerService:
 
     def nmap_output_paths(self, output_dir: Path) -> dict[str, Path]:
         ensure_dir(output_dir)
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-        return {"txt": output_dir / f"nmap-{stamp}.txt", "xml": output_dir / f"nmap-{stamp}.xml"}
+        stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
+        return {"txt": output_dir / f"nmap_{stamp}.txt", "xml": output_dir / f"nmap_{stamp}.xml"}
 
     def nuclei_output_path(self, output_dir: Path) -> Path:
         ensure_dir(output_dir)
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-        return output_dir / f"nuclei-{stamp}.jsonl"
+        stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
+        return output_dir / f"nuclei_{stamp}.jsonl"
 
     def validate_ports(self, ports: str | None) -> str:
         clean = self._clean_value(ports or "", "ports")
@@ -587,3 +808,25 @@ def _service_technologies(service_node: ElementTree.Element | None) -> list[str]
         service_node.get("version", ""),
     ]
     return [value for value in values if value]
+
+
+def _simulated_nmap_xml(host: str) -> str:
+    return f"""<?xml version="1.0"?>
+<nmaprun>
+  <host>
+    <status state="up"/>
+    <address addr="{host}" addrtype="ipv4"/>
+    <hostnames><hostname name="{host}" type="user"/></hostnames>
+    <ports>
+      <port protocol="tcp" portid="80">
+        <state state="open"/>
+        <service name="http" product="nginx" version="simulado"/>
+      </port>
+      <port protocol="tcp" portid="443">
+        <state state="open"/>
+        <service name="https" product="apache" version="simulado"/>
+      </port>
+    </ports>
+  </host>
+</nmaprun>
+"""

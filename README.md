@@ -11,8 +11,8 @@ Esta implementacao segue os documentos oficiais em `docs/MASTER_PROMPT.md` e `do
 - Interface de terminal com estilo cyber/hacker, paineis, tabelas, mensagens coloridas, Rich quando disponivel, menu organizado, ajuda integrada e barra de progresso.
 - Instalador assistido para verificar Python, pip, Git, dependencias, estrutura do projeto, Nmap, Nuclei, permissoes e capacidade de execucao.
 - Gerenciador de modulos com descoberta automatica, metadados, estados, execucao, eventos e isolamento de falhas.
-- Modulos internos `nmap_scan` e `nuclei_scan` para analises autorizadas com confirmacao obrigatoria.
-- Modulo `smart_scan` para correlacionar Nmap + Nuclei, selecionar endpoints web relevantes e priorizar risco.
+- Modulos internos `nmap_scan` e `nuclei_scan` para analises autorizadas com comandos reais, confirmacao obrigatoria e simulacao marcada quando a ferramenta externa nao estiver instalada.
+- Modulo `smart_scan` para executar Nmap primeiro, interpretar XML, selecionar endpoints web relevantes, rodar Nuclei somente nesses endpoints e priorizar risco.
 - Baseline defensivo para comparar exposicoes antes/depois, novas portas, servicos removidos, mudancas de versao e achados persistentes.
 - Sistema centralizado de configuracao com valores padrao, validacao e persistencia.
 - Configuracao YAML segura em `config/sentinelscan.yaml`, com exemplo em `config/sentinelscan.example.yaml`.
@@ -170,15 +170,15 @@ python main.py scan smart 127.0.0.1 --profile advanced --nse-profile safe --auth
 Regras de seguranca:
 
 - Nao existe modo stealth, evasao, exploit automatico ou brute force.
-- Advanced/custom exigem `--extra-confirm`.
+- Avancado/custom exigem `--extra-confirm`.
 - Nuclei nao roda se nao houver endpoint web relevante.
-- Se Nuclei nao estiver instalado, o smart scan continua com Nmap e registra a decisao.
+- Se Nuclei nao estiver instalado, o smart scan continua com Nmap e registra a decisao; com `--simulate`, gera achados ficticios claramente marcados.
 - Todos os subprocessos usam lista de argumentos e `shell=False`.
 
 Relatorios:
 
 ```text
-reports/<projeto-ou-global>/<ano>/<mes>/<dia>/<sessao-ou-sessionless>/smart-scan/
+reports/smart_scan/
 ```
 
 ## Baseline Defensivo
@@ -357,18 +357,23 @@ python main.py scan nmap 127.0.0.1 --authorize
 
 Perfis disponiveis:
 
-- `quick`: verificacao rapida com opcoes leves.
-- `basic`: perfil padrao seguro.
-- `services`: identifica servicos com `-sV --version-light`.
-- `ports`: permite informar portas com `--ports 80,443`.
-- `custom`: permite apenas flags controladas e exige `--extra-confirm`.
+- `rapida` ou `quick`: Varredura rapida, usa `nmap -T4 -F TARGET`.
+- `servicos` ou `services`: Deteccao de servicos, usa `nmap -sV TARGET`.
+- `scripts-padrao`: Scripts padrao, usa `nmap -sC TARGET`.
+- `servicos-scripts`: Servicos e scripts, usa `nmap -sV -sC TARGET`.
+- `portas` ou `ports`: Portas especificas, usa `nmap -p PORTAS TARGET`.
+- `custom`: Perfil personalizado com flags permitidas e `--extra-confirm`.
 
 Exemplos:
 
 ```bash
-python main.py scan nmap 127.0.0.1 --profile quick --authorize
-python main.py scan nmap 192.168.1.10 --profile ports --ports 22,80,443 --authorize
+python main.py scan nmap 127.0.0.1 --profile rapida --authorize
+python main.py scan nmap 127.0.0.1 --profile servicos --authorize
+python main.py scan nmap 127.0.0.1 --profile scripts-padrao --authorize
+python main.py scan nmap 127.0.0.1 --profile servicos-scripts --authorize
+python main.py scan nmap 192.168.1.10 --profile portas --ports 22,80,443 --authorize
 python main.py scan nmap localhost --profile custom --custom-flag -sV --authorize --extra-confirm
+python main.py scan nmap 127.0.0.1 --authorize --simulate
 ```
 
 O modulo salva a saida bruta em TXT e XML, interpreta o XML e extrai host, status, portas, protocolo, estado, servico e versao quando disponivel. Os relatorios profissionais sao gerados em TXT, JSON, CSV e HTML.
@@ -376,7 +381,7 @@ O modulo salva a saida bruta em TXT e XML, interpreta o XML e extrai host, statu
 Relatorios do Nmap:
 
 ```text
-reports/<projeto-ou-global>/<ano>/<mes>/<dia>/<sessao-ou-sessionless>/nmap/
+reports/nmap/
 ```
 
 Erros comuns:
@@ -414,19 +419,27 @@ python main.py scan nuclei http://localhost --authorize
 
 Perfis disponiveis:
 
-- `basic`: perfil padrao seguro.
+- `basic`: Analise basica, usa `nuclei -u TARGET`.
 - `technologies`: usa tags para identificacao de tecnologias.
 - `exposure`: procura exposicoes comuns e configuracoes indevidas.
 - `low-medium`: limita severidade a baixa e media.
-- `high`: usa severidade alta/critica e exige confirmacao extra.
-- `custom`: permite templates controlados com `--template` e exige confirmacao extra.
+- `medium-high`: Vulnerabilidades medias e altas, usa `-severity medium,high`.
+- `high`: Vulnerabilidades altas, usa `-severity high` e exige confirmacao extra.
+- `critical`: Vulnerabilidades criticas, usa `-severity critical` e exige confirmacao extra.
+- `template`: usa template especifico com `-t CAMINHO` e exige confirmacao extra.
+- `custom`: permite templates, tags e severidades controladas e exige confirmacao extra.
 
 Exemplos:
 
 ```bash
 python main.py scan nuclei http://localhost --profile basic --authorize
 python main.py scan nuclei http://localhost https://127.0.0.1 --profile low-medium --authorize
-python main.py scan nuclei http://localhost --profile custom --template exposures/ --authorize --extra-confirm
+python main.py scan nuclei http://localhost --profile medium-high --authorize
+python main.py scan nuclei http://localhost --profile high --authorize --extra-confirm
+python main.py scan nuclei http://localhost --profile critical --authorize --extra-confirm
+python main.py scan nuclei http://localhost --profile template --template exposures/ --authorize --extra-confirm
+python main.py scan nuclei --target-file targets.txt --authorize
+python main.py scan nuclei http://localhost --authorize --simulate
 ```
 
 Parametros configuraveis:
@@ -440,7 +453,7 @@ O modulo salva a saida estruturada em JSONL, interpreta os achados e extrai alvo
 Relatorios do Nuclei:
 
 ```text
-reports/<projeto-ou-global>/<ano>/<mes>/<dia>/<sessao-ou-sessionless>/nuclei/
+reports/nuclei/
 ```
 
 Erros comuns:
@@ -847,7 +860,7 @@ A licenca do projeto esta em `LICENSE`. Leia esse arquivo antes de redistribuir,
 
 ## Testes
 
-A suite usa `pytest` e cobre nucleo, CLI, configuracao, YAML, logs, relatorios, projetos, sessoes, modulos, plugins, utilitarios, erros, integracao, regressao, limpeza segura, Nmap, Nuclei, smart scan, baseline, instalador assistido e smoke tests. A validacao atual consolidou 210 testes automatizados.
+A suite usa `pytest` e cobre nucleo, CLI, configuracao, YAML, logs, relatorios, projetos, sessoes, modulos, plugins, utilitarios, erros, integracao, regressao, limpeza segura, Nmap, Nuclei, smart scan, baseline, instalador assistido e smoke tests. A validacao atual consolidou 224 testes automatizados.
 
 ```bash
 pytest

@@ -1,4 +1,4 @@
-"""Authorized Nmap integration module."""
+"""Modulo de integracao Nmap autorizada."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from typing import Any
 from core.exceptions import ValidationError
 from core.module import BaseModule, ModuleExecutionContext, ModuleMetadata, ModuleResult
 from services.scanner_service import (
+    AUTHORIZATION_BLOCK_MESSAGE,
     AUTHORIZED_USE_NOTICE,
     ETHICAL_NOTICE,
     ScannerError,
@@ -20,10 +21,10 @@ from services.scanner_service import (
 class NmapScanModule(BaseModule):
     metadata = ModuleMetadata(
         id="nmap_scan",
-        name="Nmap Authorized Scan",
+        name="Analise Nmap Autorizada",
         version="1.0.0",
         author="Joao Guilherme",
-        description="Runs controlled Nmap scans for owned, lab, or explicitly authorized targets.",
+        description="Executa Nmap controlado apenas em alvos proprios, laboratorio ou explicitamente autorizados.",
         category="authorized-scanning",
     )
 
@@ -49,22 +50,28 @@ class NmapScanModule(BaseModule):
         target = str(parameters["target"]).strip()
         profile = scanner.normalize_nmap_profile(parameters.get("profile") or "basic")
         if not _truthy(parameters.get("authorized")):
-            return self._cancelled(app, target, profile, "Authorization was not confirmed.")
+            return self._cancelled(app, target, profile, AUTHORIZATION_BLOCK_MESSAGE)
         if profile == "custom" and not _truthy(parameters.get("extra_confirmed")):
-            return self._cancelled(app, target, profile, "Custom profile requires extra confirmation.")
+            return self._cancelled(app, target, profile, "Perfil personalizado exige confirmacao extra.")
 
         output_dir = app.report_service.tool_output_dir(context.project_id, context.session_id, "nmap")
+        command = scanner.build_nmap_command(
+            target=target,
+            output_dir=output_dir,
+            profile=profile,
+            ports=parameters.get("ports"),
+            custom_flags=_list_value(parameters.get("custom_flags")),
+            timeout=parameters.get("timeout"),
+        )
         try:
-            command = scanner.build_nmap_command(
-                target=target,
-                output_dir=output_dir,
-                profile=profile,
-                ports=parameters.get("ports"),
-                custom_flags=_list_value(parameters.get("custom_flags")),
-                timeout=parameters.get("timeout"),
-            )
             execution = scanner.run_nmap(command, output_dir)
-            payload = self._payload(target, profile, command.to_dict(), execution.to_dict())
+            payload = self._payload(
+                target,
+                profile,
+                scanner.nmap_profile_info(profile),
+                command.to_dict(),
+                execution.to_dict(),
+            )
             reports = self._generate_reports(app, payload, context)
             payload["reports"] = reports
             self._history(app, "success", payload)
@@ -72,9 +79,28 @@ class NmapScanModule(BaseModule):
                 success=True,
                 status="completed",
                 data=payload,
-                messages=["Nmap analysis completed.", f"Reports generated: {len(reports)}"],
+                messages=["Analise Nmap concluida.", f"Relatorios gerados: {len(reports)}"],
             )
         except ScannerToolUnavailable as exc:
+            if _truthy(parameters.get("simulate")):
+                execution = scanner.simulate_nmap(command, output_dir, target)
+                payload = self._payload(
+                    target,
+                    profile,
+                    scanner.nmap_profile_info(profile),
+                    command.to_dict(),
+                    execution.to_dict(),
+                )
+                payload["simulation_notice"] = _simulation_notice()
+                reports = self._generate_reports(app, payload, context)
+                payload["reports"] = reports
+                self._history(app, "simulated", payload)
+                return self.result(
+                    True,
+                    "simulated",
+                    payload,
+                    [_simulation_notice(), f"Relatorios gerados: {len(reports)}"],
+                )
             return self._failure(app, "tool_missing", target, profile, exc)
         except ScannerTimeoutError as exc:
             return self._failure(app, "timeout", target, profile, exc)
@@ -89,6 +115,7 @@ class NmapScanModule(BaseModule):
         self,
         target: str,
         profile: str,
+        profile_info: dict[str, str],
         command: dict[str, Any],
         execution: dict[str, Any],
     ) -> dict[str, Any]:
@@ -97,8 +124,10 @@ class NmapScanModule(BaseModule):
             "tool": "nmap",
             "target": target,
             "profile": profile,
+            "profile_info": profile_info,
             "authorized_notice": AUTHORIZED_USE_NOTICE,
             "ethical_notice": ETHICAL_NOTICE,
+            "progress": _progress_steps("nmap"),
             "command": command,
             "execution": execution,
             "summary": {
@@ -118,7 +147,7 @@ class NmapScanModule(BaseModule):
         reports: list[dict[str, Any]] = []
         for report_format in _report_formats(context.parameters.get("report_formats")):
             record = app.report_service.generate_report(
-                title=f"Nmap Authorized Scan: {payload['target']}",
+                title=f"Nmap autorizado: {payload['target']}",
                 results={"success": True, "status": "completed", "data": payload},
                 project_id=context.project_id,
                 session_id=context.session_id,
@@ -138,10 +167,17 @@ class NmapScanModule(BaseModule):
             "reason": reason,
         }
         self._history(app, "cancelled", payload)
-        return self.result(True, "cancelled", payload, [reason, "Nmap was not executed."])
+        return self.result(True, "cancelled", payload, [reason, "Nmap nao foi executado."])
 
     def _failure(self, app: Any, status: str, target: str, profile: str, exc: Exception) -> ModuleResult:
-        payload = {"tool": "nmap", "target": target, "profile": profile, "error": str(exc)}
+        payload = {
+            "tool": "nmap",
+            "target": target,
+            "profile": profile,
+            "error": str(exc),
+            "install": _nmap_install_instructions(),
+            "simulation": "Use --simulate para gerar dados ficticios marcados como simulacao.",
+        }
         if app.log_service:
             app.log_service.record_event(
                 component="nmap_scan",
@@ -150,7 +186,7 @@ class NmapScanModule(BaseModule):
                 details=payload,
             )
         self._history(app, "error", payload, str(exc))
-        return self.result(False, status, payload, [str(exc), "Technical details were saved to logs."])
+        return self.result(False, status, payload, [str(exc), "Detalhes tecnicos foram salvos nos logs."])
 
     def _history(
         self, app: Any, result: str, details: dict[str, Any], error: str | None = None
@@ -185,6 +221,34 @@ def _report_formats(value: Any) -> list[str]:
     if invalid:
         raise ValidationError(f"Unsupported report format: {invalid[0]}")
     return formats
+
+
+def _progress_steps(tool: str) -> list[str]:
+    return [
+        "Validando alvo",
+        "Verificando autorizacao",
+        "Verificando ferramenta instalada",
+        "Preparando comando",
+        f"Executando {tool.upper()}",
+        "Interpretando resultado",
+        "Gerando relatorio",
+        "Finalizado",
+    ]
+
+
+def _simulation_notice() -> str:
+    return (
+        "Resultado simulado: estes dados sao ficticios e servem apenas para "
+        "demonstracao da interface e dos relatorios."
+    )
+
+
+def _nmap_install_instructions() -> dict[str, str]:
+    return {
+        "debian_ubuntu_kali": "sudo apt update && sudo apt install -y nmap",
+        "fedora": "sudo dnf install -y nmap",
+        "arch_manjaro": "sudo pacman -S nmap",
+    }
 
 
 MODULE_CLASS = NmapScanModule

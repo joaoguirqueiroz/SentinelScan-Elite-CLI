@@ -186,8 +186,15 @@ class TerminalRenderer:
             ],
             style="green" if result.get("success") else "red",
         )
+        messages = _result_messages(result, data)
+        if messages:
+            self.print_panel("Mensagens", messages, style="yellow")
         if reports:
             self.print_table(reports, ["format", "path", "generated_at"])
+        if data.get("simulation_notice"):
+            self.print_panel("Simulacao", [data["simulation_notice"]], style="yellow")
+        if data.get("progress"):
+            self.print_panel("Etapas", data["progress"], style="cyan")
 
     def print_smart_scan_result(self, result: dict[str, Any]) -> None:
         data = result.get("data", {})
@@ -208,6 +215,9 @@ class TerminalRenderer:
             ],
             style="green" if result.get("success") else "red",
         )
+        messages = _result_messages(result, data)
+        if messages:
+            self.print_panel("Mensagens", messages, style="yellow")
         findings = correlation.get("findings", [])
         if findings:
             self.print_table(
@@ -219,6 +229,10 @@ class TerminalRenderer:
             self.print_panel("Decisoes do motor", decisions[:8], style="cyan")
         if reports:
             self.print_table(reports, ["format", "path", "generated_at"])
+        if data.get("simulation_notice"):
+            self.print_panel("Simulacao", [data["simulation_notice"]], style="yellow")
+        if data.get("progress"):
+            self.print_panel("Etapas", data["progress"], style="cyan")
 
     def print_baseline_compare(self, result: dict[str, Any]) -> None:
         summary = result.get("summary", {})
@@ -328,3 +342,11 @@ class TerminalRenderer:
 
     def print_info(self, message: str) -> None:
         print(info(message))
+
+
+def _result_messages(result: dict[str, Any], data: dict[str, Any]) -> list[str]:
+    messages = [str(message) for message in result.get("messages", []) if str(message).strip()]
+    reason = str(data.get("reason") or "").strip()
+    if reason and reason not in messages:
+        messages.insert(0, reason)
+    return messages

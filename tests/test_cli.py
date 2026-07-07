@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 import cli.app as cli_app
-from cli.app import _parse_json, _parse_params, _parse_value, main
+from cli.app import _parse_json, _parse_params, _parse_value, _read_lines_file, main
 from cli.app import _resolve_root
 from core.exceptions import ValidationError
 
@@ -236,6 +236,7 @@ def test_cli_scan_nmap_requires_authorization(runtime_root, capsys):
     assert exit_code == 0
     assert "Resultado: nmap_scan" in captured.out
     assert "cancelled" in captured.out
+    assert "Execucao bloqueada" in captured.out
 
 
 def test_cli_scan_nuclei_requires_authorization(runtime_root, capsys):
@@ -244,6 +245,35 @@ def test_cli_scan_nuclei_requires_authorization(runtime_root, capsys):
     assert exit_code == 0
     assert "Resultado: nuclei_scan" in captured.out
     assert "cancelled" in captured.out
+    assert "Execucao bloqueada" in captured.out
+
+
+def test_cli_scan_nuclei_accepts_target_file_in_simulation(runtime_root, capsys, monkeypatch):
+    targets_file = runtime_root / "examples" / "nuclei-targets.txt"
+    targets_file.write_text(
+        "# authorized local targets\nhttp://localhost\nhttp://127.0.0.1\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "services.scanner_service.ScannerService.is_installed",
+        lambda self, binary: False,
+    )
+
+    exit_code, captured = run_cli(
+        capsys,
+        runtime_root,
+        "scan",
+        "nuclei",
+        "--target-file",
+        str(targets_file),
+        "--authorize",
+        "--simulate",
+    )
+
+    assert exit_code == 0
+    assert "Resultado simulado" in captured.out
+    assert "simulated" in captured.out
+    assert (runtime_root / "reports" / "nuclei").exists()
 
 
 def test_cli_scan_smart_requires_authorization(runtime_root, capsys):
@@ -252,6 +282,7 @@ def test_cli_scan_smart_requires_authorization(runtime_root, capsys):
     assert exit_code == 0
     assert "Smart Scan" in captured.out
     assert "cancelled" in captured.out
+    assert "Execucao bloqueada" in captured.out
 
 
 def test_cli_baseline_create_and_compare(runtime_root, capsys):
@@ -491,6 +522,20 @@ def test_cli_parse_helpers():
         _parse_params(["bad"])
     with pytest.raises(ValidationError):
         _parse_json("[1,2]")
+
+
+def test_cli_reads_target_files_safely(runtime_root):
+    targets_file = runtime_root / "examples" / "targets.txt"
+    targets_file.write_text("\ufeff# comentario\nhttp://localhost\n\nhttp://127.0.0.1\n", encoding="utf-8")
+
+    assert _read_lines_file(str(targets_file)) == ["http://localhost", "http://127.0.0.1"]
+
+    empty_file = runtime_root / "examples" / "empty-targets.txt"
+    empty_file.write_text("# vazio\n\n", encoding="utf-8")
+    with pytest.raises(ValidationError, match="empty"):
+        _read_lines_file(str(empty_file))
+    with pytest.raises(ValidationError, match="not found"):
+        _read_lines_file(str(runtime_root / "examples" / "missing-targets.txt"))
 
 
 def test_resolve_root_defaults_to_project_root(monkeypatch):
